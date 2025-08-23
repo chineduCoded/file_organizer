@@ -80,9 +80,8 @@ impl Scanner {
 
     fn is_hidden(entry: &DirEntry) -> bool {
         entry.file_name()
-            .to_str()
-            .map(|s| s.starts_with('.'))
-            .unwrap_or(false)
+            .to_string_lossy()
+            .starts_with('.')
     }
 
     fn is_extension_allowed(&self, ext: Option<&OsStr>) -> bool {
@@ -100,7 +99,6 @@ impl Scanner {
 
     /// Helper method to process an entry with filtering
     fn process_entry(&self, entry: &DirEntry) -> Result<Option<FileMetadata>, io::Error> {
-        let file_type = entry.file_type();
         let metadata = entry.path().symlink_metadata()?;
 
         if !self.config.include_hidden && Self::is_hidden(entry) {
@@ -133,15 +131,15 @@ impl Scanner {
         let file_metadata = FileMetadata {
             path: entry.path().to_path_buf(),
             file_name: entry.file_name().to_string_lossy().into_owned(),
-            extension: entry.path().extension().and_then(|e| e.to_str().map(|s| s.to_owned())),
+            extension: entry.path().extension().map(|e| e.to_string_lossy().into_owned()),
             size: metadata.len(),
             created: metadata.created().ok(),
             modified: metadata.modified().ok(),
             accessed: metadata.accessed().ok(),
             permissions: metadata.permissions(),
-            is_file: file_type.is_file(),
-            is_dir: file_type.is_dir(),
-            is_symlink: file_type.is_symlink(),
+            is_file: metadata.is_file(),
+            is_dir: metadata.is_dir(),
+            is_symlink: metadata.is_symlink(),
         };
 
         Ok(Some(file_metadata))
@@ -420,6 +418,7 @@ mod tests {
         let target = dir.path().join("nonexistent.txt");
         let symlink = dir.path().join("broken_link");
 
+        // Create symlink (may not work on Windows without permissions)
         #[cfg(unix)]
         std::os::unix::fs::symlink(&target, &symlink).unwrap();
         #[cfg(windows)]
