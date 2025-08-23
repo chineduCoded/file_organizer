@@ -1,3 +1,10 @@
+use clap::Parser;
+use file_organizer::cli::{Args, Commands};
+
 fn main() {
-    println!("Hello, world!");
+    let args = Args::parse();
+    
+    match args.cmd {
+        Commands::Organize { watch, dry_run } => {},
+    }
 }
