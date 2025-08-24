@@ -1,4 +1,15 @@
+use tracing_subscriber::fmt;
+
 use crate::errors::FileOrganizerError;
+
+pub fn init_tracing() {
+    fmt::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .with_file(true)
+        .with_line_number(true)
+        .compact()
+        .init();
+}
 
 pub fn humanize(e: &FileOrganizerError) -> String {
     use FileOrganizerError::*;
@@ -11,6 +22,14 @@ pub fn humanize(e: &FileOrganizerError) -> String {
         Watch(msg) => format!("Watching error: {}", msg),
         InvalidPath(path) => format!("Invalid path: {}", path.display()),
         Classify(msg) => format!("Classify error: {}", msg),
+        NoMatchingRule(msg) => format!("No matching rule error: {}", msg),
+        Json { path, source } => {
+            format!("JSON error in {}: {}", path.display(), source)
+        }
+        Regex { pattern, source } => {
+            format!("Regex error in pattern `{}`: {}", pattern, source)
+        }
+        InvalidRule(msg) => format!("Invalid rule: {}", msg),
     }
 }
 
@@ -25,5 +44,9 @@ pub fn map_exit_code(e: &FileOrganizerError) -> u8 {
         Watch(_) => 7,
         InvalidPath(_) => 8,
         Classify(_) => 9,
+        NoMatchingRule(_) => 10,
+        Json { .. } => 11,
+        Regex { .. } => 12,
+        InvalidRule(_) => 13,
     }
 }

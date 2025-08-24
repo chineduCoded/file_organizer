@@ -1,0 +1,50 @@
+{
+  "rules": [
+    {
+      "category": "Images",
+      "extensions": [".jpg", ".jpeg", ".png", ".gif", ".svg"],
+      "destination": "Pictures"
+    },
+    {
+      "category": "Documents",
+      "extensions": [".pdf", ".docx", ".txt", ".odt", ".md"],
+      "destination": "Documents"
+    },
+    {
+      "category": "Presentations",
+      "extensions": [".pptx", ".ppt", ".key", ".odp"],
+      "destination": "Presentations"
+    },
+    {
+      "category": "Sheets",
+      "extensions": [".xlsx", ".xls", ".csv", ".ods"],
+      "destination": "Sheets"
+    },
+    {
+      "category": "Videos",
+      "extensions": [".mp4", ".mkv", ".mov"],
+      "destination": "Videos"
+    },
+    {
+      "category": "Archives",
+      "extensions": [".zip", ".tar.gz", ".rar", ".7z"],
+      "destination": "Archives"
+    },
+    {
+      "category": "Reports",
+      "regex": "report_.*\\.pdf$",
+      "destination": "Reports"
+    },
+    {
+      "category": "Invoices",
+      "regex": "invoice_\\d+\\.csv$",
+      "destination": "Accounting"
+    },
+    {
+      "category": "Audio",
+      "extensions": [".mp3", ".wav", ".flac"],
+      "regex": ".*_song\\.(mp3|wav|flac)$",
+      "destination": "Music"
+    }
+  ]
+}

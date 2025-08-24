@@ -1,5 +1,7 @@
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, process::{ExitCode, Termination}};
 use thiserror::Error;
+
+use crate::utils::{humanize, map_exit_code};
 
 pub type Result<T, E = FileOrganizerError> = std::result::Result<T, E>;
 
@@ -8,8 +10,8 @@ pub enum FileOrganizerError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Configuration error: {0}")]
-    Config(String),
+    #[error("Config error: {0}")]
+    Config(#[from] anyhow::Error),
 
     #[error("Indexing error: {0}")]
     Index(String),
@@ -28,6 +30,25 @@ pub enum FileOrganizerError {
 
     #[error("Classify error: {0}")]
     Classify(String),
+
+    #[error("No matching rule: {0}")]
+    NoMatchingRule(String),
+
+    #[error("Invalid rule: {0}")]
+    InvalidRule(String),
+
+    #[error("JSON error at {path}: {source}")]
+    Json { path: PathBuf, source: serde_json::Error },
+
+    #[error("Regex error on`{pattern}`: {source}")]
+    Regex { pattern: String, source: regex::Error },
+}
+
+impl Termination for FileOrganizerError {
+    fn report(self) -> ExitCode {
+        eprintln!("{}", humanize(&self));
+        ExitCode::from(map_exit_code(&self))
+    }
 }
 
 /// Fine-grained, per-file outcome (never aborts the whole run).
