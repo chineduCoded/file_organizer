@@ -7,12 +7,15 @@ edition = "2024"
 anyhow = "1.0.99"
 clap = { version = "4.5.45", features = ["derive"] }
 color-eyre = "0.6.5"
+lru = "0.16.0"
 notify = "8.2.0"
+redb = "2.6.3"
 regex = "1.11.1"
+rusqlite = "0.37.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
 sha2 = "0.10.9"
-sled = "0.34.7"
+sled = { version = "0.34.7", optional = true }
 tempfile = "3.21.0"
 thiserror = "2.0.16"
 tracing = "0.1.41"

@@ -1,10 +1,10 @@
 use serde::Deserialize;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use std::{fs, path::Path};
 
 use crate::errors::{FileOrganizerError, Result};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Rule {
     pub category: String,
 
@@ -37,7 +37,7 @@ impl RulesConfig {
                 source: e
             })?;
 
-        // Compile regex patterns for faster matching
+        // Pre-validate and compile rules
         for (idx, rule) in config.rules.iter_mut().enumerate() {
             if rule.extensions.is_empty() && rule.regex.is_none() {
                 return Err(FileOrganizerError::InvalidRule(format!(
@@ -47,15 +47,17 @@ impl RulesConfig {
                 )));
             }
             
-
             // normalize all extensions to lowercase without leading dot
             rule.extensions = rule.extensions
                 .iter()
                 .map(|e| e.trim_start_matches('.').to_lowercase())
                 .collect();
 
+            // Compile regex if present
             if let Some(pattern) = &rule.regex {
-                let compiled = Regex::new(&pattern)
+                let compiled = RegexBuilder::new(&pattern)
+                    .case_insensitive(true)
+                    .build()
                     .map_err(|e| FileOrganizerError::Regex {
                         pattern: pattern.clone(),
                         source: e,
