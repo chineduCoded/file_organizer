@@ -3,12 +3,12 @@ use tracing_subscriber::fmt;
 use crate::errors::FileOrganizerError;
 
 pub fn init_tracing() {
-    fmt::fmt()
+    let _ = fmt::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_file(true)
         .with_line_number(true)
         .compact()
-        .init();
+        .try_init();
 }
 
 pub fn humanize(e: &FileOrganizerError) -> String {

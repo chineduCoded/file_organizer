@@ -38,13 +38,15 @@ impl RulesConfig {
             })?;
 
         // Compile regex patterns for faster matching
-        for rule in &mut config.rules {
+        for (idx, rule) in config.rules.iter_mut().enumerate() {
             if rule.extensions.is_empty() && rule.regex.is_none() {
                 return Err(FileOrganizerError::InvalidRule(format!(
-                    "Rule '{}' must have at least one of 'extentions' or 'regex'",
-                    rule.category
+                    "Rule '{}' (index {}) must have at least one of 'extensions' or 'regex'",
+                    rule.category,
+                    idx + 1
                 )));
             }
+            
 
             // normalize all extensions to lowercase without leading dot
             rule.extensions = rule.extensions

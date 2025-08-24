@@ -67,6 +67,9 @@ impl Scanner {
             walk = walk.max_depth(depth);
         }
 
+        // Skip yielding the root directory itself; we only want its contents.
+        walk = walk.min_depth(1);
+
         Scanner { 
             inner: walk.into_iter(), 
             config 
