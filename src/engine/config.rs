@@ -46,6 +46,12 @@ impl RulesConfig {
                 )));
             }
 
+            // normalize all extensions to lowercase without leading dot
+            rule.extensions = rule.extensions
+                .iter()
+                .map(|e| e.trim_start_matches('.').to_lowercase())
+                .collect();
+
             if let Some(pattern) = &rule.regex {
                 let compiled = Regex::new(&pattern)
                     .map_err(|e| FileOrganizerError::Regex {
