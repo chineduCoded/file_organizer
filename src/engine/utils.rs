@@ -30,6 +30,7 @@ pub fn humanize(e: &FileOrganizerError) -> String {
             format!("Regex error in pattern `{}`: {}", pattern, source)
         }
         InvalidRule(msg) => format!("Invalid rule: {}", msg),
+        MimeDetection(msg) => format!("MIME detection error: {}", msg),
     }
 }
 
@@ -48,5 +49,7 @@ pub fn map_exit_code(e: &FileOrganizerError) -> u8 {
         Json { .. } => 11,
         Regex { .. } => 12,
         InvalidRule(_) => 13,
+        MimeDetection(_) => 14
     }
 }
+

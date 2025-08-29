@@ -30,7 +30,7 @@ impl Default for ScanConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct FileMetadata {
+pub struct RawFileMetadata {
     pub path: PathBuf,
     pub size: u64,
     pub created: Option<SystemTime>,
@@ -58,7 +58,7 @@ impl Scanner {
         }
     }
 
-    fn process_entry(&self, entry: &DirEntry) -> io::Result<FileMetadata> {
+    fn process_entry(&self, entry: &DirEntry) -> io::Result<RawFileMetadata> {
         let metadata = entry.path().symlink_metadata()?;
 
         // filter hidden
@@ -95,7 +95,7 @@ impl Scanner {
             }
         }
 
-        Ok(FileMetadata {
+        Ok(RawFileMetadata {
             path: entry.path().to_path_buf(),
             size: metadata.len(),
             created: metadata.created().ok(),
@@ -110,7 +110,7 @@ impl Scanner {
 }
 
 impl Iterator for Scanner {
-    type Item = io::Result<FileMetadata>;
+    type Item = io::Result<RawFileMetadata>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(entry) = self.inner.next() {
@@ -145,18 +145,18 @@ fn is_hidden(entry: &DirEntry) -> bool {
 }
 
 /// Extension trait for filtering scanner results
-pub trait ScannerExt: Iterator<Item = io::Result<FileMetadata>> + Sized {
+pub trait ScannerExt: Iterator<Item = io::Result<RawFileMetadata>> + Sized {
     /// Keep only successful entries, discarding errors
-    fn filter_ok(self) -> Box<dyn Iterator<Item = FileMetadata>>;
+    fn filter_ok(self) -> Box<dyn Iterator<Item = RawFileMetadata>>;
     /// Keep only errors (for logging/debugging)
     fn filter_errs(self) -> Box<dyn Iterator<Item = io::Error>>;
 }
 
 impl<I> ScannerExt for I
 where
-    I: Iterator<Item = io::Result<FileMetadata>> + 'static,
+    I: Iterator<Item = io::Result<RawFileMetadata>> + 'static,
 {
-    fn filter_ok(self) -> Box<dyn Iterator<Item = FileMetadata>> {
+    fn filter_ok(self) -> Box<dyn Iterator<Item = RawFileMetadata>> {
         Box::new(self.filter_map(|res| res.ok()))
     }
 

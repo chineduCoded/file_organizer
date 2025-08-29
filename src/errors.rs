@@ -25,6 +25,9 @@ pub enum FileOrganizerError {
     #[error("Watching error: {0}")]
     Watch(String),
 
+    #[error("MIME detection error: {0}")]
+    MimeDetection(String),
+
     #[error("Invalid path: {0}")]
     InvalidPath(PathBuf),
 
