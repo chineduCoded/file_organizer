@@ -69,6 +69,8 @@ async fn process_files_concurrently(
     let semaphore = Arc::new(Semaphore::new(32)); // Max concurrent files
     let mut tasks = FuturesUnordered::new();
 
+    let root_dir = root_dir.to_path_buf();
+
     for raw_file in files {
         let permit = semaphore.clone().acquire_owned().await.map_err(|e| {
             // Convert AcquireError to your error type
@@ -81,15 +83,15 @@ async fn process_files_concurrently(
         let registry_clone = registry.clone();
         let mover_clone = mover.clone();
         let hasher_clone = hasher.clone();
+        let root_dir_clone = root_dir.clone();
 
         tasks.push(tokio::spawn(async move {
-            let root_dir = root_dir.to_path_buf();
             process_file(
                 raw_file,
                 registry_clone,
                 mover_clone,
                 hasher_clone,
-                &root_dir,
+                &root_dir_clone,
                 permit,
                 dry_run,
             ).await
@@ -125,15 +127,12 @@ async fn process_file(
     _permit: OwnedSemaphorePermit,
     dry_run: bool,
 ) -> Result<Option<(RawFileMetadata, String, PathBuf, String)>> {
-    // if should_skip_file(&raw, &db).await? {
-    //     tracing::debug!("Skipping unchanged file: {:?}", raw.path);
-    //     return Ok(());
-    // }
-
     let classified = registry.classify(&raw).await?;
-    let destination = PathBuilder::new(&classified)
+    let mut destination = PathBuilder::new(&classified)
         .base(root_dir)
         .build();
+
+    destination.push(raw.path.file_name().unwrap());
 
     if dry_run {
         tracing::info!("Would move {:?} to {:?}", raw.path, destination);
