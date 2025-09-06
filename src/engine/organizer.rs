@@ -34,7 +34,7 @@ pub async fn organise_files(
     let files = scan_files(root_dir).await?;
     
     // Process files with concurrency control
-    process_files_concurrently(files, db.clone(), registry, mover, hasher, dry_run).await?;
+    process_files_concurrently(files, db.clone(), registry, mover, hasher, root_dir, dry_run).await?;
     
     // Commit DB checkpoint once all files are processed
     db.save().await?;
@@ -63,6 +63,7 @@ async fn process_files_concurrently(
     registry: Arc<ClassifierRegistry>,
     mover: Arc<FileMover>,
     hasher: Arc<dyn FileHasher + Send + Sync>,
+    root_dir: &Path,
     dry_run: bool
 ) -> Result<()> {
     let semaphore = Arc::new(Semaphore::new(32)); // Max concurrent files
@@ -82,11 +83,13 @@ async fn process_files_concurrently(
         let hasher_clone = hasher.clone();
 
         tasks.push(tokio::spawn(async move {
+            let root_dir = root_dir.to_path_buf();
             process_file(
                 raw_file,
                 registry_clone,
                 mover_clone,
                 hasher_clone,
+                &root_dir,
                 permit,
                 dry_run,
             ).await
@@ -118,6 +121,7 @@ async fn process_file(
     registry: Arc<ClassifierRegistry>,
     mover: Arc<FileMover>,
     hasher: Arc<dyn FileHasher + Send + Sync>,
+    root_dir: &Path,
     _permit: OwnedSemaphorePermit,
     dry_run: bool,
 ) -> Result<Option<(RawFileMetadata, String, PathBuf, String)>> {
@@ -127,7 +131,9 @@ async fn process_file(
     // }
 
     let classified = registry.classify(&raw).await?;
-    let destination = PathBuilder::new(&classified).build();
+    let destination = PathBuilder::new(&classified)
+        .base(root_dir)
+        .build();
 
     if dry_run {
         tracing::info!("Would move {:?} to {:?}", raw.path, destination);
