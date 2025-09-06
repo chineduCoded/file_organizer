@@ -3,9 +3,7 @@ use std::path::Path;
 use async_trait::async_trait;
 
 use crate::{
-    classifier::{detect_mime, system_time_to_year, Classifier},
-    errors::Result,
-    metadata::{ClassifiedFileMetadata, DocumentSubcategory, FileCategory},
+    errors::Result, metadata::{ClassifiedFileMetadata, DocumentSubcategory, FileCategory}, registry::Classifier, utils::{detect_mime, system_time_to_year}
 };
 
 pub struct DocumentClassifier;

@@ -1,7 +1,10 @@
+use sqlx;
 use std::{io, path::PathBuf, process::{ExitCode, Termination}};
+use serde::Serialize;
 use thiserror::Error;
+use tokio::task::JoinError;
 
-use crate::utils::{humanize, map_exit_code};
+use crate::utils::humanize;
 
 pub type Result<T, E = FileOrganizerError> = std::result::Result<T, E>;
 
@@ -43,41 +46,101 @@ pub enum FileOrganizerError {
     #[error("JSON error at {path}: {source}")]
     Json { path: PathBuf, source: serde_json::Error },
 
-    #[error("Regex error on`{pattern}`: {source}")]
+    #[error("Regex error on `{pattern}`: {source}")]
     Regex { pattern: String, source: regex::Error },
+
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Skipped: {0:?}")]
+    Skipped(SkipReason),
+
+    #[error("Task join error: {0}")]
+    Join(#[from] JoinError),
+
+    #[error("Other: {0}")]
+    Other(String),
+}
+
+impl FileOrganizerError {
+    pub fn exit_code(&self) -> u8 {
+        use FileOrganizerError::*;
+        match self {
+            Io(_) => 2,
+            Config(_) => 3,
+            Index(_) => 4,
+            Move(_) => 5,
+            Scan(_) => 6,
+            Watch(_) => 7,
+            InvalidPath(_) => 8,
+            Classify(_) => 9,
+            NoMatchingRule(_) => 10,
+            Json { .. } => 11,
+            Regex { .. } => 12,
+            Database(_) => 13,
+            InvalidRule(_) => 14,
+            MimeDetection(_) => 15,
+            Skipped(_) => 16,
+            Join(_) => 17,
+            Other(_) => 18,
+        }
+    }
 }
 
 impl Termination for FileOrganizerError {
     fn report(self) -> ExitCode {
         eprintln!("{}", humanize(&self));
-        ExitCode::from(map_exit_code(&self))
+        ExitCode::from(self.exit_code())
     }
 }
 
-/// Fine-grained, per-file outcome (never aborts the whole run).
-#[derive(Debug)]
-pub enum FileOutcome {
-    Ok(FileReport),
-    Err(FileErrorReport)
+/// Why a file was skipped
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Serialize)]
+pub enum SkipReason {
+    Hidden,
+    IsDir,
+    WrongExtension,
+    TooSmall,
+    TooLarge,
+    MetadataUnreadable,
 }
 
-#[derive(Debug)]
-pub struct FileReport {
-    pub src: PathBuf,
-    pub dest: PathBuf,
-    pub action: MoveAction,
+impl SkipReason {
+    pub const VARIANTS: [SkipReason; 6] = [
+        SkipReason::Hidden,
+        SkipReason::IsDir,
+        SkipReason::WrongExtension,
+        SkipReason::TooSmall,
+        SkipReason::TooLarge,
+        SkipReason::MetadataUnreadable,
+    ];
+
+    #[inline]
+    pub fn as_index(&self) -> usize {
+        match self {
+            SkipReason::Hidden => 0,
+            SkipReason::IsDir => 1,
+            SkipReason::WrongExtension => 2,
+            SkipReason::TooSmall => 3,
+            SkipReason::TooLarge => 4,
+            SkipReason::MetadataUnreadable => 5,
+        }
+    }
 }
 
-#[derive(Debug)]
-pub enum MoveAction {
-    Moved,
-    Skipped,
-    Renamed(PathBuf),
+impl std::fmt::Display for SkipReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            SkipReason::Hidden => "File skipped because it is hidden",
+            SkipReason::IsDir => "Skipped directory (not scanning dirs)",
+            SkipReason::WrongExtension => "File skipped due to unsupported extension",
+            SkipReason::TooSmall => "File skipped because it is smaller than minimum size",
+            SkipReason::TooLarge => "File skipped because it is larger than maximum size",
+            SkipReason::MetadataUnreadable => "File skipped because metadata could not be read",
+        };
+        write!(f, "{}", msg)
+    }
 }
 
-#[derive(Debug)]
-pub struct FileErrorReport {
-    pub path: PathBuf,
-    pub stage: &'static str, // "scan" | "classify" | "move" | "index"
-    pub error: FileOrganizerError,
-}
+
+

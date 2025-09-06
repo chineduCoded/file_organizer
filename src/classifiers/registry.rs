@@ -3,30 +3,17 @@ use std::{
     ffi::OsStr,
     path::Path,
     sync::Arc,
-    time::SystemTime,
 };
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Datelike};
 use futures::future::try_join_all;
 use tokio::sync::RwLock;
 
 use crate::{
     errors::{FileOrganizerError, Result},
-    metadata::{ClassifiedFileMetadata, FileCategory},
-    scanner::RawFileMetadata,
+    metadata::ClassifiedFileMetadata,
+    scanner::RawFileMetadata, utils::detect_mime,
 };
-
-// Utility functions
-pub fn detect_mime(ext: &str) -> String {
-    let mime = mime_guess::from_ext(ext).first_or_octet_stream();
-    mime.essence_str().to_string()
-}
-
-pub fn system_time_to_year(t: SystemTime) -> Option<i32> {
-    let datetime: DateTime<Utc> = t.into();
-    Some(datetime.year())
-}
 
 #[async_trait]
 pub trait Classifier: Send + Sync {
@@ -145,25 +132,5 @@ impl ClassifierRegistry {
         let mut write_cache = self.mime_cache.write().await;
         write_cache.insert(ext.to_string(), mime.clone());
         mime
-    }
-}
-
-pub struct GenericClassifier;
-
-#[async_trait]
-impl Classifier for GenericClassifier {
-    fn name(&self) -> &'static str {
-        "GenericClassifier"
-    }
-
-    fn confidence(&self, _: &str, _: &str) -> u8 {
-        1
-    }
-
-    async fn extract_metadata(&self, path: &Path) -> Result<ClassifiedFileMetadata> {
-        Ok(ClassifiedFileMetadata::new(
-            path.to_path_buf(),
-            FileCategory::Others,
-        ))
     }
 }

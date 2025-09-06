@@ -1,10 +1,7 @@
 use std::path::Path;
 use async_trait::async_trait;
 use crate::{
-    classifier::{detect_mime, system_time_to_year, Classifier}, 
-    classifiers::executables_const::{EXECUTABLE_EXTENSION_MAP, EXECUTABLE_MIME_PATTERNS}, 
-    errors::Result, 
-    metadata::{ClassifiedFileMetadata, ExecutableSubcategory, FileCategory}
+    classifiers::executables_const::{EXECUTABLE_EXTENSION_MAP, EXECUTABLE_MIME_PATTERNS}, errors::Result, metadata::{ClassifiedFileMetadata, ExecutableSubcategory, FileCategory}, registry::Classifier, utils::{detect_mime, system_time_to_year}
 };
 
 pub struct ExecutableClassifier;
@@ -60,7 +57,7 @@ impl Classifier for ExecutableClassifier {
             .modified()
             .ok()
             .or_else(|| raw.created().ok())
-            .and_then(system_time_to_year);
+            .and_then(|t| system_time_to_year(t));
 
         let subcategory = EXECUTABLE_EXTENSION_MAP
             .get(ext.as_str())

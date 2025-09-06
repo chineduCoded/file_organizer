@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, fmt};
 
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc, Datelike};
@@ -20,6 +20,21 @@ pub enum FileCategory {
 impl Default for FileCategory {
     fn default() -> Self {
         FileCategory::Others
+    }
+}
+
+impl fmt::Display for FileCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FileCategory::Documents(sub) => write!(f, "Documents::{:?}", sub),
+            FileCategory::Images(sub) => write!(f, "Images::{:?}", sub),
+            FileCategory::Videos(sub) => write!(f, "Videos::{:?}", sub),
+            FileCategory::Audio(sub) => write!(f, "Audio::{:?}", sub),
+            FileCategory::Archives(sub) => write!(f, "Archives::{:?}", sub),
+            FileCategory::Executables(sub) => write!(f, "Executables::{:?}", sub),
+            FileCategory::Code(sub) => write!(f, "Code::{:?}", sub),
+            FileCategory::Others => write!(f, "Others"),
+        }
     }
 }
 

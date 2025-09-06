@@ -1,9 +1,7 @@
 use std::path::Path;
 use async_trait::async_trait;
 use crate::{
-    classifier::{detect_mime, system_time_to_year, Classifier},
-    errors::Result,
-    metadata::{ClassifiedFileMetadata, VideoSubcategory, FileCategory},
+    errors::Result, metadata::{ClassifiedFileMetadata, FileCategory, VideoSubcategory}, registry::Classifier, utils::{detect_mime, system_time_to_year}
 };
 
 pub struct VideoClassifier;
@@ -56,7 +54,7 @@ impl Classifier for VideoClassifier {
             .modified()
             .ok()
             .or_else(|| raw.created().ok())
-            .and_then(system_time_to_year);
+            .and_then(|t| system_time_to_year(t));
 
         let subcategory = match ext.as_str() {
             "mp4" | "m4v" => VideoSubcategory::Mp4,

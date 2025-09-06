@@ -1,9 +1,10 @@
 use std::path::Path;
 use async_trait::async_trait;
 use crate::{
-    classifier::{detect_mime, system_time_to_year, Classifier},
-    errors::Result,
-    metadata::{ClassifiedFileMetadata, ArchiveSubcategory, FileCategory},
+    errors::Result, 
+    metadata::{ArchiveSubcategory, ClassifiedFileMetadata, FileCategory}, 
+    registry::Classifier, 
+    utils::{detect_mime, system_time_to_year}
 };
 
 pub struct ArchiveClassifier;
@@ -67,7 +68,7 @@ impl Classifier for ArchiveClassifier {
             .modified()
             .ok()
             .or_else(|| raw.created().ok())
-            .and_then(system_time_to_year);
+            .and_then(|t| system_time_to_year(t));
 
         let subcategory = match ext.as_str() {
             "zip" => ArchiveSubcategory::Zip,

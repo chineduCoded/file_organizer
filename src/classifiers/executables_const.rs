@@ -1,60 +1,61 @@
-use std::collections::HashMap;
-
-use lazy_static::lazy_static;
+use phf::{phf_map, phf_set};
 
 use crate::metadata::ExecutableSubcategory;
 
+// --- Extension → Subcategory map ---
+pub static EXECUTABLE_EXTENSION_MAP: phf::Map<&'static str, ExecutableSubcategory> = phf_map! {
+    // Windows applications
+    "exe" => ExecutableSubcategory::WindowsApp,
+    "msi" => ExecutableSubcategory::WindowsApp,
+    "dll" => ExecutableSubcategory::WindowsApp,
 
-lazy_static! {
-    pub static ref EXECUTABLE_EXTENSION_MAP: HashMap<&'static str, ExecutableSubcategory> = {
-        let mut m = HashMap::new();
-        
-        // Windows applications
-        m.insert("exe", ExecutableSubcategory::WindowsApp);
-        m.insert("msi", ExecutableSubcategory::WindowsApp);
-        m.insert("dll", ExecutableSubcategory::WindowsApp);
-        
-        // macOS applications
-        m.insert("app", ExecutableSubcategory::MacApp);
-        m.insert("dmg", ExecutableSubcategory::MacApp);
-        m.insert("pkg", ExecutableSubcategory::MacApp);
-        m.insert("dylib", ExecutableSubcategory::MacApp);
-        
-        // Linux applications
-        m.insert("deb", ExecutableSubcategory::LinuxApp);
-        m.insert("rpm", ExecutableSubcategory::LinuxApp);
-        m.insert("so", ExecutableSubcategory::LinuxApp);
-        m.insert("bin", ExecutableSubcategory::LinuxApp);
-        
-        // Mobile applications
-        m.insert("apk", ExecutableSubcategory::MobileApp);
-        m.insert("ipa", ExecutableSubcategory::MobileApp);
-        
-        // Scripts
-        m.insert("bat", ExecutableSubcategory::Script);
-        m.insert("cmd", ExecutableSubcategory::Script);
-        m.insert("sh", ExecutableSubcategory::Script);
-        m.insert("ps1", ExecutableSubcategory::Script);
-        
-        // Configuration files
-        m.insert("conf", ExecutableSubcategory::Config);
-        m.insert("ini", ExecutableSubcategory::Config);
-        
-        // Log files
-        m.insert("log", ExecutableSubcategory::Log);
-        
-        m
-    };
-     pub static ref EXECUTABLE_EXTENSIONS: Vec<&'static str> = {
-        EXECUTABLE_EXTENSION_MAP.keys().copied().collect()
-     };
+    // macOS applications
+    "app" => ExecutableSubcategory::MacApp,
+    "dmg" => ExecutableSubcategory::MacApp,
+    "pkg" => ExecutableSubcategory::MacApp,
+    "dylib" => ExecutableSubcategory::MacApp,
 
-    pub static ref EXECUTABLE_MIME_PATTERNS: Vec<&'static str> = vec![
-        // The most common and reliable executable MIME types
-        "application/x-msdownload",          // Windows .exe
-        "application/x-msi",                 // Windows .msi
-        "application/x-executable",          // Linux binaries
-        "application/x-mach-binary",         // macOS binaries
-        "application/vnd.android.package-archive", // Android .apk
-    ];
-}
+    // Linux applications
+    "deb" => ExecutableSubcategory::LinuxApp,
+    "rpm" => ExecutableSubcategory::LinuxApp,
+    "so" => ExecutableSubcategory::LinuxApp,
+    "bin" => ExecutableSubcategory::LinuxApp,
+
+    // Mobile applications
+    "apk" => ExecutableSubcategory::MobileApp,
+    "ipa" => ExecutableSubcategory::MobileApp,
+
+    // Scripts
+    "bat" => ExecutableSubcategory::Script,
+    "cmd" => ExecutableSubcategory::Script,
+    "sh"  => ExecutableSubcategory::Script,
+    "ps1" => ExecutableSubcategory::Script,
+
+    // Configuration files
+    "conf" => ExecutableSubcategory::Config,
+    "ini"  => ExecutableSubcategory::Config,
+
+    // Log files
+    "log"  => ExecutableSubcategory::Log,
+};
+
+// --- Just extensions (for quick membership check) ---
+#[allow(dead_code)]
+pub static EXECUTABLE_EXTENSIONS: phf::Set<&'static str> = phf_set! {
+    "exe", "msi", "dll",
+    "app", "dmg", "pkg", "dylib",
+    "deb", "rpm", "so", "bin",
+    "apk", "ipa",
+    "bat", "cmd", "sh", "ps1",
+    "conf", "ini",
+    "log"
+};
+
+// --- MIME patterns (slice is enough, no phf needed) ---
+pub static EXECUTABLE_MIME_PATTERNS: &[&str] = &[
+    "application/x-msdownload",                 // Windows .exe
+    "application/x-msi",                        // Windows .msi
+    "application/x-executable",                 // Linux binaries
+    "application/x-mach-binary",                // macOS binaries
+    "application/vnd.android.package-archive",  // Android .apk
+];

@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python Flask Internship Interview Prep</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="🧪-python-flask-internship-interview-prep">🧪 Python Flask Internship Interview Prep</h1>
+<h2 id="👤-personal-introduction-practice-this">👤 Personal Introduction (Practice This)</h2>
+<blockquote>
+<p>“Hi, I’m Chinedu, a backend-focused developer currently learning Python and Flask. I’ve worked on a few small projects like [insert example]. I’m excited to grow with mentorship and contribute to real-world projects like yours.”</p>
+</blockquote>
+<hr>
+<h2 id="🐍-flask-basics-quick-review">🐍 Flask Basics (Quick Review)</h2>
+
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>What You Should Know</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What is Flask?</td>
+<td>A lightweight Python web framework</td>
+</tr>
+<tr>
+<td>Route</td>
+<td><code>@app.route('/home')</code> maps a URL to a function</td>
+</tr>
+<tr>
+<td>GET vs POST</td>
+<td>GET fetches data, POST sends data (e.g., forms, JSON)</td>
+</tr>
+<tr>
+<td>Templates</td>
+<td>Flask uses Jinja2: <code>{{ variable }}</code> inside HTML</td>
+</tr>
+<tr>
+<td>Request Data</td>
+<td><code>request.form</code>, <code>request.args</code>, <code>request.json</code></td>
+</tr>
+<tr>
+<td>App Run</td>
+<td><code>app.run(debug=True)</code> starts the server</td>
+</tr>
+<tr>
+<td>Blueprints</td>
+<td>Helps organize large apps into reusable modules</td>
+</tr>
+</tbody>
+</table><hr>
+<h2 id="🚀-example-project-optional-if-youve-built-one">🚀 Example Project (Optional If You’ve Built One)</h2>
+<ul>
+<li>A small blog</li>
+<li>To-do list API</li>
+<li>Basic CRUD app with SQLite</li>
+<li>Anything you’ve cloned or followed from a tutorial</li>
+</ul>
+<hr>
+<h2 id="🧠-common-questions--answers">🧠 Common Questions &amp; Answers</h2>
+<h3 id="q1-why-do-you-want-to-join-this-internship">Q1: Why do you want to join this internship?</h3>
+<blockquote>
+<p>“I want real-world experience working with Flask in a team, and I believe mentorship and code reviews will help me grow faster than learning alone.”</p>
+</blockquote>
+<h3 id="q2-what-have-you-built-with-python-or-flask">Q2: What have you built with Python or Flask?</h3>
+<blockquote>
+<p>“I built a simple Flask app that lets users [describe project]. It uses routes, HTML templates, and stores data in a basic database.”</p>
+</blockquote>
+<h3 id="q3-what’s-your-understanding-of-flask">Q3: What’s your understanding of Flask?</h3>
+<blockquote>
+<p>“Flask is a microframework in Python for building web applications. It gives you control over routing, handling HTTP methods, rendering templates, and working with databases.”</p>
+</blockquote>
+<h3 id="q4-are-you-comfortable-learning-fast-and-working-with-git-apis-etc.">Q4: Are you comfortable learning fast and working with Git, APIs, etc.?</h3>
+<blockquote>
+<p>“Yes, I’ve been practicing Git and working with APIs. I’m eager to learn and open to feedback.”</p>
+</blockquote>
+<h3 id="q5-how-do-you-handle-errors-or-when-youre-stuck">Q5: How do you handle errors or when you’re stuck?</h3>
+<blockquote>
+<p>“I usually check docs, search online (like StackOverflow), and if still stuck, I ask for help. I’m not afraid to admit when I need guidance.”</p>
+</blockquote>
+<hr>
+<h2 id="🎯-questions-you-can-ask-them">🎯 Questions You Can Ask Them</h2>
+<ul>
+<li>What stack do you use besides Flask (e.g., DB, frontend)?</li>
+<li>How will mentorship or code review work?</li>
+<li>Will I get to contribute to real product features?</li>
+<li>What does success look like for interns on your team?</li>
+</ul>
+<hr>
+</div>
+</body>
+
+</html>

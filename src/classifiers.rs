@@ -1,5 +1,6 @@
 pub mod metadata;
-pub mod classifier;
+pub mod registry;
+pub mod generic;
 pub mod docs_classifier;
 pub mod image_classifier;
 pub mod video_classifier;

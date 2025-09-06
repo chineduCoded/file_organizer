@@ -1,55 +1,95 @@
-use tracing_subscriber::fmt;
+use std::{sync::Arc, time::SystemTime, path::PathBuf};
 
-use crate::errors::FileOrganizerError;
+use chrono::{DateTime, Utc, Datelike};
+use tracing_subscriber::{fmt, EnvFilter};
+use dirs::data_local_dir;
+
+use crate::{
+    archive_classifier::ArchiveClassifier, 
+    audio_classifier::AudioClassifier, 
+    code_classifier::CodeClassifier, 
+    docs_classifier::DocumentClassifier,
+    errors::FileOrganizerError, 
+    executable_classifier::ExecutableClassifier, 
+    generic::GenericClassifier, 
+    image_classifier::ImageClassifier, 
+    registry::ClassifierRegistry, 
+    video_classifier::VideoClassifier};
 
 pub fn init_tracing() {
-    let _ = fmt::fmt()
-        .with_max_level(tracing::Level::INFO)
+    // Example: export RUST_LOG="info,file_organizer=debug"
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info")); 
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false) // hide target module path
         .with_file(true)
         .with_line_number(true)
+        .with_thread_ids(true)
+        .with_timer(fmt::time::LocalTime::rfc_3339()) // timestamp
         .compact()
-        .try_init();
+        .init();
+}
+
+pub fn default_db_path() -> PathBuf {
+    let mut path = data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+    path.push("file_organizer");
+    std::fs::create_dir_all(&path).ok();
+    path.push("file_organizer.db");
+
+    path
+}
+
+pub fn detect_mime(ext: &str) -> String {
+    let mime = mime_guess::from_ext(ext).first_or_octet_stream();
+    mime.essence_str().to_string()
+}
+
+pub fn system_time_to_year(t: SystemTime) -> Option<i32> {
+    let datetime: DateTime<Utc> = t.into();
+    Some(datetime.year())
+}
+
+/// Creates and configures the classifier registry with priorities
+pub fn create_classifier_registry() -> ClassifierRegistry {
+    let mut registry = ClassifierRegistry::new();
+    // Register classifiers with appropriate base priorities
+    // Higher priority = more specific/specialized classifiers
+    // Lower priority = more general/fallback classifiers
+
+    // Media classifiers (very specific, high confidence)
+    registry.register_with_priority(100, Arc::new(ImageClassifier));
+    registry.register_with_priority(95, Arc::new(AudioClassifier));
+    registry.register_with_priority(90, Arc::new(VideoClassifier));
+
+    // Document classifier (specific but may overlap with code)
+    registry.register_with_priority(85, Arc::new(DocumentClassifier));
+
+    // Code classifier (specific but may overlap with documents/executables)
+    registry.register_with_priority(80, Arc::new(CodeClassifier));
+
+    // Archive classifier (specific but may overlap with executables)
+    registry.register_with_priority(75, Arc::new(ArchiveClassifier));
+
+    // Executable classifier (broader category, may overlap with others)
+    registry.register_with_priority(70, Arc::new(ExecutableClassifier));
+
+    // Generic fallback (lowest priority, handles everything)
+    registry.register_with_priority(10, Arc::new(GenericClassifier));
+
+    registry
 }
 
 pub fn humanize(e: &FileOrganizerError) -> String {
-    use FileOrganizerError::*;
     match e {
-        Io(err) => format!("I/O error: {}", err),
-        Config(msg) => format!("Configuration error: {}", msg),
-        Index(msg) => format!("Indexing error: {}", msg),
-        Move(msg) => format!("Moving error: {}", msg),
-        Scan(msg) => format!("Scanning error: {}", msg),
-        Watch(msg) => format!("Watching error: {}", msg),
-        InvalidPath(path) => format!("Invalid path: {}", path.display()),
-        Classify(msg) => format!("Classify error: {}", msg),
-        NoMatchingRule(msg) => format!("No matching rule error: {}", msg),
-        Json { path, source } => {
+        FileOrganizerError::InvalidPath(path) => format!("Invalid path: {}", path.display()),
+        FileOrganizerError::Json { path, source } => {
             format!("JSON error in {}: {}", path.display(), source)
         }
-        Regex { pattern, source } => {
-            format!("Regex error in pattern `{}`: {}", pattern, source)
+        FileOrganizerError::Regex { pattern, source } => {
+            format!("Regex error in `{}`: {}", pattern, source)
         }
-        InvalidRule(msg) => format!("Invalid rule: {}", msg),
-        MimeDetection(msg) => format!("MIME detection error: {}", msg),
+        other => other.to_string(), // fall back to #[error(..)]
     }
 }
-
-pub fn map_exit_code(e: &FileOrganizerError) -> u8 {
-    use FileOrganizerError::*;
-    match e {
-        Io(_) => 2,
-        Config(_) => 3,
-        Index(_) => 4,
-        Move(_) => 5,
-        Scan(_) => 6,
-        Watch(_) => 7,
-        InvalidPath(_) => 8,
-        Classify(_) => 9,
-        NoMatchingRule(_) => 10,
-        Json { .. } => 11,
-        Regex { .. } => 12,
-        InvalidRule(_) => 13,
-        MimeDetection(_) => 14
-    }
-}
-

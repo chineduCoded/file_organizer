@@ -1,7 +1,7 @@
 use std::path::Path;
 use async_trait::async_trait;
 use crate::{
-    classifier::{detect_mime, system_time_to_year, Classifier}, code_const::{CODE_MIME_PATTERNS, EXTENSION_MAP}, errors::Result, metadata::{ClassifiedFileMetadata, CodeSubcategory, FileCategory}
+    code_const::{CODE_MIME_PATTERNS, EXTENSION_MAP}, errors::Result, metadata::{ClassifiedFileMetadata, CodeSubcategory, FileCategory}, registry::Classifier, utils::{detect_mime, system_time_to_year}
 };
 
 pub struct CodeClassifier;
@@ -86,7 +86,7 @@ impl Classifier for CodeClassifier {
             .modified()
             .ok()
             .or_else(|| raw.created().ok())
-            .and_then(system_time_to_year);
+            .and_then(|t| system_time_to_year(t));
 
         // Determine subcategory using the extension map
         let subcategory = EXTENSION_MAP
