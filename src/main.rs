@@ -18,8 +18,9 @@ async fn main() -> anyhow::Result<()> {
                 organise_files(Path::new(&path), dry_run).await?;
             }
         }
-        Commands::Revert { root_dir } => {
-            revert_files(&root_dir).await?;
+        Commands::Revert { root_dir, no_cleanup } => {
+            // Pass `!no_cleanup` so default = true
+            revert_files(&root_dir, !no_cleanup).await?;
         }
     }
     

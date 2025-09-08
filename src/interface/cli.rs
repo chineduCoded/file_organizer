@@ -27,5 +27,9 @@ pub enum Commands {
     Revert {
         /// Root directory to revert to
         root_dir: PathBuf,
+
+        /// Skip cleaning up empty directories
+        #[arg(long, default_value_t = false)]
+        no_cleanup: bool,
     },
 }

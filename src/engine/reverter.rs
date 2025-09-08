@@ -1,4 +1,6 @@
 use std::{collections::HashSet, path::Path, sync::Arc};
+use tokio::fs;
+
 use crate::{
     conflict_resolver::resolve_conflict,
     index::{Db, DbFileEntry},
@@ -7,8 +9,38 @@ use crate::{
     utils::default_db_path,
 };
 
+/// Iteratively remove empty directories under `root`.
+async fn cleanup_empty_dirs(root: &Path) -> Result<()> {
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let mut entries = fs::read_dir(&dir).await?;
+        let mut is_empty = true;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                is_empty = false; // contains subdir, revisit later
+            } else {
+                is_empty = false;
+            }
+        }
+
+        // Don’t remove the original root itself
+        if is_empty && dir != root {
+            if fs::remove_dir(&dir).await.is_ok() {
+                tracing::info!("Removed empty dir: {:?}", dir);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+
 /// Reverts previously organized files back to their original locations.
-pub async fn revert_files(root_dir: &Path) -> Result<()> {
+pub async fn revert_files(root_dir: &Path, cleanup: bool) -> Result<()> {
     let db = Arc::new(Db::new(&default_db_path()).await?);
     let mover = Arc::new(FileMover::new());
 
@@ -47,9 +79,14 @@ pub async fn revert_files(root_dir: &Path) -> Result<()> {
         db.update_dest_path_tx(&mut tx, &file.path, &final_path).await?;
     }
 
-    // Commit all changes at once
     tx.commit().await?;
     tracing::info!("Revert completed with {} files processed.", files.len());
+
+    if cleanup {
+        if let Err(e) = cleanup_empty_dirs(root_dir).await {
+            tracing::warn!("Failed to fully cleanup dirs: {:?}", e);
+        }
+    }
 
     Ok(())
 }
