@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::{Duration, SystemTime}};
+use std::{path::PathBuf, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 use chrono::{DateTime, Utc, Datelike};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -65,7 +65,9 @@ pub fn make_progress(total: u64, msg: &str) -> ProgressBar {
 pub fn default_db_path() -> PathBuf {
     let mut path = data_local_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("file_organizer");
-    std::fs::create_dir_all(&path).ok();
+    if let Err(e) = std::fs::create_dir_all(&path) {
+        tracing::warn!(?path, error=%e, "Failed to create data directory; continuing, but DB open may fail");
+    }
     path.push("file_organizer.db");
 
     path
@@ -76,9 +78,29 @@ pub fn detect_mime(ext: &str) -> String {
     mime.essence_str().to_string()
 }
 
+/// Extract UTC year from SystemTime safely.
 pub fn system_time_to_year(t: SystemTime) -> Option<i32> {
     let datetime: DateTime<Utc> = t.into();
     Some(datetime.year())
+}
+
+/// Convert SystemTime → Option<i64> (seconds since epoch).
+/// Returns None if pre-1970 or overflow.
+pub fn to_unix(ts: Option<SystemTime>) -> Option<i64> {
+    ts.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+      .map(|d| d.as_secs() as i64)
+}
+
+/// Convert i64 (from DB) → Option<SystemTime>.
+/// Returns None if ts < 0 (pre-1970).
+pub fn from_unix(ts: Option<i64>) -> Option<SystemTime> {
+    ts.and_then(|s| {
+        if s < 0 {
+            None
+        } else {
+            Some(UNIX_EPOCH + Duration::from_secs(s as u64))
+        }
+    })
 }
 
 /// Creates and configures the classifier registry with priorities

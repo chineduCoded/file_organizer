@@ -52,11 +52,13 @@ pub enum FileOrganizerError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("Skipped: {0:?}")]
+    #[error("Skipped: {0}")]
     Skipped(SkipReason),
-
     #[error("Task join error: {0}")]
     Join(#[from] JoinError),
+
+    #[error("Concurrency error: {0}")]
+    Concurrency(String),
 
     #[error("Other: {0}")]
     Other(String),
@@ -82,7 +84,8 @@ impl FileOrganizerError {
             MimeDetection(_) => 15,
             Skipped(_) => 16,
             Join(_) => 17,
-            Other(_) => 18,
+            Concurrency(_) => 18,
+            Other(_) => 19,
         }
     }
 }
@@ -91,6 +94,12 @@ impl Termination for FileOrganizerError {
     fn report(self) -> ExitCode {
         eprintln!("{}", humanize(&self));
         ExitCode::from(self.exit_code())
+    }
+}
+
+impl From<tokio::sync::AcquireError> for FileOrganizerError {
+    fn from(err: tokio::sync::AcquireError) -> Self {
+        FileOrganizerError::Concurrency(err.to_string())
     }
 }
 

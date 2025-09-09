@@ -38,6 +38,22 @@ impl FileMover {
         Ok(())
     }
 
+    #[cfg(unix)]
+    fn is_cross_device_error(e: &io::Error) -> bool {
+        e.kind() == io::ErrorKind::CrossesDevices
+    }
+
+    #[cfg(windows)]
+    fn is_cross_device_error(e: &io::Error) -> bool {
+        // Windows returns ERROR_NOT_SAME_DEVICE (17) for cross-device moves
+        e.raw_os_error() == Some(17)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn is_cross_device_error(_e: &io::Error) -> bool {
+        false
+    }
+
     /// Move file, falling back to copy+delete if across devices
     #[instrument(skip(self), level = "debug")]
     pub async fn move_file(&self, src: &Path, dest: &Path) -> Result<()> {
@@ -48,8 +64,8 @@ impl FileMover {
                 debug!(?src, ?dest, "File moved with rename");
                 Ok(())
             }
-            Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
-                debug!(?src, ?dest, "Cross-device move, falling back to copy+delete");
+            Err(e) if Self::is_cross_device_error(&e) => {
+                tracing::debug!(?src, ?dest, "Cross-device move, falling back to copy+delete");
                 self.copy_file(src, dest).await?;
                 fs::remove_file(src).await?;
                 Ok(())
@@ -82,6 +98,12 @@ impl FileMover {
                 Ok(())
             }
         }
+
+        // Fallback for other platforms (e.g., WASM, embedded)
+        #[cfg(not(any(unix, windows)))]
+        {
+            self.buffered_copy(src, dest).await
+        }
     }
 
     /// Buffered async copy fallback
@@ -90,6 +112,9 @@ impl FileMover {
         let mut dest_file = fs::File::create(dest).await?;
         tokio::io::copy(&mut src_file, &mut dest_file).await?;
         dest_file.flush().await?;
+
+        let metadata = fs::metadata(src).await?;
+        fs::set_permissions(dest, metadata.permissions()).await?;
         Ok(())
     }
 
@@ -131,14 +156,19 @@ impl FileMover {
                     remaining as usize,
                 )?;
                 if written == 0 {
+                    if remaining > 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "sendfile returned 0 before copying all data"
+                        ));
+                    }
                     break;
                 }
                 remaining -= written as u64;
             }
             Ok::<_, std::io::Error>(())
         })
-        .await
-        .unwrap()?; // join + IO error propagation
+        .await??; // join + IO error propagation
 
         Ok(())
     }
@@ -168,8 +198,7 @@ impl FileMover {
                 Ok(())
             }
         })
-        .await
-        .unwrap()?; // propagate errors
+        .await??;
 
         debug!(?src, ?dest, "Copied with CopyFileExW");
         Ok(())

@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::future::try_join_all;
+use futures::future::join_all;
 use tokio::sync::RwLock;
 
 use crate::{
@@ -63,10 +63,14 @@ impl ClassifierRegistry {
             })
             .collect();
 
-        match try_join_all(tasks).await {
-            Ok(results) => results,
-            Err(join_error) => vec![Err(FileOrganizerError::Classify(join_error.to_string()))],
-        }
+        let join_results = join_all(tasks).await;
+        join_results
+            .into_iter()
+            .map(|jh| match jh {
+                Ok(inner) => inner,
+                Err(e) => Err(FileOrganizerError::Classify(e.to_string())),
+            })
+            .collect()
     }
 
     pub async fn classify(&self, raw: &RawFileMetadata) -> Result<ClassifiedFileMetadata> {
@@ -110,7 +114,7 @@ impl ClassifierRegistry {
                     return Ok(metadata);
                 }
                 Err(e) => {
-                    tracing::warn!("Classifier {} failed: {}", classifier.name(), e);
+                    tracing::debug!("Classifier {} failed: {}", classifier.name(), e);
                 }
             }
         }

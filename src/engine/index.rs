@@ -3,7 +3,7 @@ use std::{path::{Path, PathBuf}, sync::Arc, time::SystemTime};
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Row, Sqlite, Transaction};
 use tokio::sync::Semaphore;
 
-use crate::{errors::Result, scanner::RawFileMetadata};
+use crate::{errors::Result, scanner::RawFileMetadata, utils::{from_unix, to_unix}};
 
 
 #[derive(Clone)]
@@ -29,6 +29,12 @@ impl Db {
             .connect(&url)
             .await?;
 
+        // --- Pragmas recommended for concurrent access ---
+        sqlx::query("PRAGMA journal_mode=WAL;").execute(&pool).await?;
+        sqlx::query("PRAGMA synchronous=NORMAL;").execute(&pool).await?;
+        sqlx::query("PRAGMA foreign_keys=ON;").execute(&pool).await?;
+        sqlx::query("PRAGMA busy_timeout=5000;").execute(&pool).await?;
+
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS files (
@@ -48,6 +54,12 @@ impl Db {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"CREATE INDEX IF NOT EXISTS idx_files_updated_at ON files(updated_at);"#,
+        )
+        .execute(&pool)
+        .await?;
+
         Ok(Self { 
             pool,
             write_limit: Arc::new(Semaphore::new(1)),
@@ -59,6 +71,11 @@ impl Db {
         Ok(self.pool.begin().await?)
     }
 
+    /// Acquire a write permit from the semaphore
+    async fn acquire_write_permit(&self) -> Result<tokio::sync::OwnedSemaphorePermit> {
+        Ok(self.write_limit.clone().acquire_owned().await?)
+    }
+
     pub async fn update_file(
         &self,
         meta: &RawFileMetadata,
@@ -66,11 +83,11 @@ impl Db {
         dest: &Path,
         hash: &str,
     ) -> Result<()> {
-        let _permit = self.write_limit.acquire().await.unwrap();
+        let _permit = self.acquire_write_permit().await?;
 
-        let modified = meta.modified.map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64);
-        let created = meta.created.map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64);
-        let accessed = meta.accessed.map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64);
+        let modified = to_unix(meta.modified);
+        let created = to_unix(meta.created);
+        let accessed = to_unix(meta.accessed);
 
         sqlx::query(
             r#"
@@ -105,19 +122,14 @@ impl Db {
         &self,
         entries: &[(RawFileMetadata, String, std::path::PathBuf, String)],
     ) -> Result<()> {
-        let _permit = self.write_limit.acquire().await.unwrap();
+        let _permit = self.acquire_write_permit().await?;
 
         let mut tx = self.pool.begin().await?;
+
         for (meta, category, dest, hash) in entries {
-            let modified = meta.modified.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
-            });
-            let created = meta.created.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
-            });
-            let accessed = meta.accessed.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
-            });
+            let modified = to_unix(meta.modified);
+            let created  = to_unix(meta.created);
+            let accessed = to_unix(meta.accessed);
 
             sqlx::query(
                 r#"
@@ -159,22 +171,23 @@ impl Db {
         .await?;
 
         if let Some(r) = row {
-            use std::time::{Duration, SystemTime};
+            let created  = from_unix(r.try_get::<Option<i64>, _>("created")?);
+            let modified = from_unix(r.try_get::<Option<i64>, _>("modified")?);
+            let accessed = from_unix(r.try_get::<Option<i64>, _>("accessed")?);
 
-            let to_system_time = |ts: Option<i64>| {
-                ts.map(|s| SystemTime::UNIX_EPOCH + Duration::from_secs(s as u64))
-            };
+            let fs_meta = tokio::fs::symlink_metadata(path).await?;
+            let ft = fs_meta.file_type();
 
             Ok(Some(RawFileMetadata {
                 path: path.to_path_buf(),
                 size: r.try_get::<i64, _>("size")? as u64,
-                created: to_system_time(r.try_get::<Option<i64>, _>("created")?),
-                modified: to_system_time(r.try_get::<Option<i64>, _>("modified")?),
-                accessed: to_system_time(r.try_get::<Option<i64>, _>("accessed")?),
-                permissions: std::fs::metadata(path)?.permissions(),
-                is_file: true,
-                is_dir: false,
-                is_symlink: false,
+                created,
+                modified,
+                accessed,
+                permissions: fs_meta.permissions(),
+                is_file: ft.is_file(),
+                is_dir: ft.is_dir(),
+                is_symlink: ft.is_symlink(),
             }))
         } else {
             Ok(None)
@@ -192,9 +205,7 @@ impl Db {
         Ok(DbFileEntry {
             path: PathBuf::from(path),
             size: row.try_get::<i64, _>("size")? as u64,
-            modified: modified.map(|s| {
-                std::time::UNIX_EPOCH + std::time::Duration::from_secs(s as u64)
-            }),
+            modified: from_unix(modified),
             hash: row.try_get("hash")?,
             category: row.try_get("category")?,
             dest_path: PathBuf::from(dest_path),
@@ -236,6 +247,8 @@ impl Db {
 
     /// Update a file entry in the database (non-transactional).
     pub async fn update_file_entry(&self, entry: &DbFileEntry) -> Result<()> {
+        let _permit = self.acquire_write_permit().await;
+        
         sqlx::query(
             r#"
             INSERT INTO files (path, size, modified, category, dest_path, hash, updated_at)
@@ -251,9 +264,7 @@ impl Db {
         )
         .bind(entry.path.to_string_lossy().to_string())
         .bind(entry.size as i64)
-        .bind(entry.modified.map(|t| {
-            t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
-        }))
+        .bind(to_unix(entry.modified))
         .bind(&entry.category)
         .bind(entry.dest_path.to_string_lossy().to_string())
         .bind(&entry.hash)
@@ -286,10 +297,30 @@ impl Db {
         Ok(())
     }
 
+    /// Run periodic maintenance: vacuum + analyze
+    pub async fn maintenance(&self) -> Result<()> {
+        // Rebuild database file to reclaim space
+        sqlx::query("VACUUM;").execute(&self.pool).await?;
+
+        // Update statistics so query planner knows to use indexes
+        sqlx::query("ANALYZE;").execute(&self.pool).await?;
+
+        Ok(())
+    }
+
     pub async fn save(&self) -> Result<()> {
+        let _permit = self.acquire_write_permit().await;
+
+        // checkpoint WAL → flushes write-ahead log into main DB
         sqlx::query("PRAGMA wal_checkpoint(FULL);")
             .execute(&self.pool)
             .await?;
+
+        // Run analyze after checkpoint
+        sqlx::query("ANALYZE;")
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 }

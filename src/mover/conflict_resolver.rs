@@ -12,12 +12,17 @@ pub async fn resolve_conflict(path: &Path, overwrite: bool) -> Result<PathBuf> {
         }
         return Ok(path.to_path_buf())
     }
+
+    // Non-overwrite: keep original if free
+    if !tokio::fs::try_exists(path).await? {
+        return Ok(path.to_path_buf());
+    }
     
-    let mut counter = 1;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
 
+    let mut counter = 1;
     loop {
         let candidate = parent.join(format!("{}_{}{}", stem, counter, ext));
         if !fs::try_exists(&candidate).await? {

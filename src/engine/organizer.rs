@@ -135,7 +135,9 @@ async fn process_files_concurrently(
         }
     }
 
-    db.update_files_batch(&results).await?;
+    if !dry_run {
+        db.update_files_batch(&results).await?;
+    }
 
     let summary = if dry_run {
         format!("✅ Dry-run completed: {} files analyzed", total)
@@ -207,9 +209,16 @@ async fn handle_file_movement(
         mover.move_file(&raw.path, &destination).await?;
         Ok((raw, category_str, destination, source_hash))
     } else {
-        let resolved_path = resolve_conflict(&destination, false).await?;
-        mover.move_file(&raw.path, &resolved_path).await?;
-        Ok((raw, category_str, resolved_path, source_hash))
+        let dest_hash = hex::encode(hasher.hash_file(&destination).await?);
+
+        if source_hash == dest_hash {
+            tracing::debug!("Skipping identical file: {:?}", raw.path);
+            Ok((raw, category_str, destination, source_hash))
+        } else {
+            let resolved_path = resolve_conflict(&destination, false).await?;
+            mover.move_file(&raw.path, &resolved_path).await?;
+            Ok((raw, category_str, resolved_path, source_hash))
+        }
     }
 }
 /// Handles file conflicts by comparing hashes and resolving 
