@@ -1,2 +1,14 @@
 /target
 .env
+
+# Logs
+logs/
+*.log
+
+# Ignore temporary/backup files
+*.tmp
+*.bak
+
+# Ignore local databases
+*.db
+
