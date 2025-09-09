@@ -1,7 +1,9 @@
-use std::{sync::Arc, time::SystemTime, path::PathBuf};
+use std::{path::PathBuf, sync::Arc, time::{Duration, SystemTime}};
 
 use chrono::{DateTime, Utc, Datelike};
-use tracing_subscriber::{fmt, EnvFilter};
+use indicatif::{ProgressBar, ProgressStyle};
+use tracing_subscriber::{fmt, EnvFilter, prelude::*};
+use tracing_appender::rolling;
 use dirs::data_local_dir;
 
 use crate::{
@@ -14,22 +16,50 @@ use crate::{
     generic::GenericClassifier, 
     image_classifier::ImageClassifier, 
     registry::ClassifierRegistry, 
-    video_classifier::VideoClassifier};
+    video_classifier::VideoClassifier
+};
 
+/// Initialize tracing
+/// - Console: clean progress & summary (no spammy per-file logs)
+/// - File: detailed DEBUG logs for all operations
 pub fn init_tracing() {
-    // Example: export RUST_LOG="info,file_organizer=debug"
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info")); 
+    let file_appender = rolling::daily("logs", "file_organizer.log");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    Box::leak(Box::new(guard));
 
-    fmt()
-        .with_env_filter(filter)
-        .with_target(false) // hide target module path
+    let file_layer = fmt::layer()
+        .with_writer(non_blocking)
+        .with_target(true)
         .with_file(true)
         .with_line_number(true)
-        .with_thread_ids(true)
-        .with_timer(fmt::time::LocalTime::rfc_3339()) // timestamp
+        .with_timer(fmt::time::UtcTime::rfc_3339())
+        .with_filter(EnvFilter::new("debug"));
+
+    let console_layer = fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_target(false)
+        .with_file(false)
+        .with_line_number(false)
+        .with_timer(fmt::time::LocalTime::rfc_3339())
         .compact()
+        .with_filter(EnvFilter::new("warn"));
+
+    tracing_subscriber::registry()
+        .with(file_layer)
+        .with(console_layer)
         .init();
+}
+
+/// Create a styled progress bar
+pub fn make_progress(total: u64, msg: &str) -> ProgressBar {
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template("[{elapsed_precise}] [{bar:40.magenta/bright_magenta}] {pos}/{len} {msg}")
+            .unwrap()
+    );
+    pb.set_message(msg.to_string());
+    pb.enable_steady_tick(Duration::from_millis(200));
+    pb
 }
 
 pub fn default_db_path() -> PathBuf {

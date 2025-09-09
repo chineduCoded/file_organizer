@@ -12,7 +12,7 @@ use crate::{
     path_builder::PathBuilder, 
     registry::ClassifierRegistry, 
     scanner::{RawFileMetadata, Scanner, ScannerExt}, 
-    utils::{create_classifier_registry, default_db_path}
+    utils::{create_classifier_registry, default_db_path, make_progress}
 };
 
 /// Organize files in `root_dir` asynchronously and efficiently.
@@ -20,6 +20,20 @@ pub async fn organise_files(
     root_dir: &Path,
     dry_run: bool
 ) -> Result<()> {
+    if !root_dir.exists() {
+        return Err(FileOrganizerError::from(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Directory {:?} does not exist", root_dir),
+        )));
+    }
+
+    if !root_dir.is_dir() {
+        return Err(FileOrganizerError::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Path {:?} is not a directory", root_dir),
+        )));
+    }
+    
     let db_path = if dry_run {
         PathBuf::from(":memory:")
     } else {
@@ -71,6 +85,10 @@ async fn process_files_concurrently(
 
     let root_dir = root_dir.to_path_buf();
 
+    let total = files.len();
+    let label = if dry_run { "Organizing (dry-run)" } else { "Organizing" };
+    let pb = make_progress( total as u64, label);
+
     for raw_file in files {
         let permit = semaphore.clone().acquire_owned().await.map_err(|e| {
             // Convert AcquireError to your error type
@@ -84,9 +102,10 @@ async fn process_files_concurrently(
         let mover_clone = mover.clone();
         let hasher_clone = hasher.clone();
         let root_dir_clone = root_dir.clone();
+        let pb_clone = pb.clone();
 
         tasks.push(tokio::spawn(async move {
-            process_file(
+            let res = process_file(
                 raw_file,
                 registry_clone,
                 mover_clone,
@@ -94,7 +113,10 @@ async fn process_files_concurrently(
                 &root_dir_clone,
                 permit,
                 dry_run,
-            ).await
+            ).await;
+
+            pb_clone.inc(1);
+            res
         }));
     }
 
@@ -107,12 +129,26 @@ async fn process_files_concurrently(
             Ok(Ok(None)) => {}
             Ok(Err(e)) => return Err(e),
             Err(join_err) => {
+                pb.finish_and_clear();
                 return Err(FileOrganizerError::from(join_err));
             }
         }
     }
 
     db.update_files_batch(&results).await?;
+
+    let summary = if dry_run {
+        format!("✅ Dry-run completed: {} files analyzed", total)
+    } else {
+        format!("✅ Organize completed: {} files processed", total)
+    };
+    pb.finish_with_message(summary.clone());
+
+    if dry_run {
+        tracing::info!(target: "organizer", "Dry-run completed with {} files analyzed", total);
+    } else {
+        tracing::info!(target: "organizer", "Organize completed with {} files processed", total);
+    }
 
     Ok(())
 }
@@ -135,7 +171,7 @@ async fn process_file(
     destination.push(raw.path.file_name().unwrap());
 
     if dry_run {
-        tracing::info!("Would move {:?} to {:?}", raw.path, destination);
+        tracing::info!(target: "organizer", "Would move {:?} to {:?}", raw.path, destination);
         return Ok(None);
     }
 
@@ -168,11 +204,9 @@ async fn handle_file_movement(
     let destination_exists = tokio::fs::try_exists(&destination).await?;
 
     if !destination_exists {
-        // ✅ Destination doesn't exist → move file
         mover.move_file(&raw.path, &destination).await?;
         Ok((raw, category_str, destination, source_hash))
     } else {
-        // ⚡ Conflict resolution
         let resolved_path = resolve_conflict(&destination, false).await?;
         mover.move_file(&raw.path, &resolved_path).await?;
         Ok((raw, category_str, resolved_path, source_hash))
@@ -187,16 +221,14 @@ async fn handle_conflict(
     mover: Arc<FileMover>,
     hasher: Arc<dyn FileHasher + Send + Sync>,
     source_hash: String,
-    db: Arc<Db>, // still needed for lookup optimization
+    db: Arc<Db>,
 ) -> Result<(RawFileMetadata, String, PathBuf, String)> {
     let destination_hash = get_destination_hash(&destination, &db, &hasher).await?;
     let category_str = category.to_string();
 
     if source_hash == destination_hash {
-        // ✅ Files are identical → no move, just return DB entry
         Ok((raw, category_str, destination, source_hash))
     } else {
-        // ⚡ Files differ → resolve conflict + move
         let resolved_path = resolve_conflict(&destination, false).await?;
         mover.move_file(&raw.path, &resolved_path).await?;
         Ok((raw, category_str, resolved_path, source_hash))
