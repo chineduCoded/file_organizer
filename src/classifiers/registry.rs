@@ -24,8 +24,8 @@ pub trait Classifier: Send + Sync {
 
 #[derive(Default, Clone)]
 pub struct ClassifierRegistry {
-    classifiers: Arc<Vec<(u8, Arc<dyn Classifier>)>>, // (priority, classifier)
-    mime_cache: Arc<RwLock<HashMap<String, String>>>,
+    pub classifiers: Arc<Vec<(u8, Arc<dyn Classifier>)>>, // (priority, classifier)
+    pub mime_cache: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl ClassifierRegistry {
@@ -125,7 +125,7 @@ impl ClassifierRegistry {
         )))
     }
 
-    async fn get_cached_mime(&self, ext: &str) -> String {
+    pub async fn get_cached_mime(&self, ext: &str) -> String {
         let read_cache = self.mime_cache.read().await;
         if let Some(mime) = read_cache.get(ext) {
             return mime.clone();

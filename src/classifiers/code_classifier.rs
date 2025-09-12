@@ -73,6 +73,12 @@ impl Classifier for CodeClassifier {
     async fn extract_metadata(&self, path: &Path) -> Result<ClassifiedFileMetadata> {
         let raw = tokio::fs::metadata(path).await?;
         let size = raw.len();
+
+        let file_name = path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_default();
         
         let ext = path
             .extension()
@@ -90,9 +96,16 @@ impl Classifier for CodeClassifier {
 
         // Determine subcategory using the extension map
         let subcategory = EXTENSION_MAP
-            .get(ext.as_str())
+            .get(file_name.as_str())
             .cloned()
-            .unwrap_or_else(|| CodeSubcategory::Other(ext.clone()));
+            .or_else(|| EXTENSION_MAP.get(ext.as_str()).cloned())
+            .unwrap_or_else(|| {
+                CodeSubcategory::Other(if ext.is_empty() {
+                    file_name.clone()
+                } else {
+                    ext.clone()
+                })
+            });
 
         let mut classified = ClassifiedFileMetadata::new(
             path.to_path_buf(),

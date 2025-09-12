@@ -48,7 +48,7 @@ pub enum ExtraMetadataValue {
     Null,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClassifiedFileMetadata {
     pub path: PathBuf,
     pub category: FileCategory,
@@ -153,7 +153,7 @@ pub enum VideoSubcategory {
     Other,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AudioSubcategory {
     Mp3,
     Wav,
@@ -168,7 +168,7 @@ pub enum AudioSubcategory {
     Other,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ArchiveSubcategory {
     Zip,
     Tar,
