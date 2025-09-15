@@ -15,12 +15,19 @@ jobs:
           - os: ubuntu-latest
             artifact_name: linux-x86_64
             ext: tar.gz
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            artifact_name: linux-musl-x86_64
+            ext: tar.gz
+            target: x86_64-unknown-linux-musl
           - os: windows-latest
             artifact_name: windows-x86_64
             ext: zip
+            target: x86_64-pc-windows-msvc
           - os: macos-latest
             artifact_name: macos-x86_64
             ext: tar.gz
+            target: x86_64-apple-darwin
 
     steps:
       - name: Checkout code
@@ -29,20 +36,24 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build release binary
-        run: cargo build --release --locked
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package binary
         run: |
           mkdir -p artifacts
           VERSION=${GITHUB_REF#refs/tags/}
           BIN_NAME="stash"
+          BIN_PATH=target/${{ matrix.target }}/release/${BIN_NAME}
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/release/${BIN_NAME}.exe artifacts/
+            cp ${BIN_PATH}.exe artifacts/
             cd artifacts
             zip ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.zip ${BIN_NAME}.exe
           else
-            cp target/release/${BIN_NAME} artifacts/
+            cp ${BIN_PATH} artifacts/
             cd artifacts
             tar -czf ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.tar.gz ${BIN_NAME}
           fi
