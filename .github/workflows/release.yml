@@ -16,10 +16,6 @@ jobs:
             artifact_name: linux-x86_64
             ext: tar.gz
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            artifact_name: linux-musl-x86_64
-            ext: tar.gz
-            target: x86_64-unknown-linux-musl
           - os: windows-latest
             artifact_name: windows-x86_64
             ext: zip
