@@ -325,7 +325,7 @@ impl Db {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DbFileEntry {
     pub path: PathBuf,
     pub size: u64,

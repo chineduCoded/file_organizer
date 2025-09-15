@@ -2,7 +2,7 @@ mod test_utils;
 
 #[cfg(test)]
 mod tests {
-    use file_organizer::{
+    use stash::{
         metadata::{AudioSubcategory, FileCategory},
         registry::Classifier,
         audio_classifier::AudioClassifier,

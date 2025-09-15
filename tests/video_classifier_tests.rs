@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use file_organizer::{video_classifier::VideoClassifier, registry::Classifier};
+    use stash::{video_classifier::VideoClassifier, registry::Classifier};
     use tempfile::Builder;
     use tokio::fs;
-    use file_organizer::metadata::{FileCategory, VideoSubcategory};
+    use stash::metadata::{FileCategory, VideoSubcategory};
 
     // ---------------------------
     // Unit tests

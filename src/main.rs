@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use clap::Parser;
-use file_organizer::{cli::{Args, Commands}, utils::init_tracing, organizer::organise_files, reverter::revert_files};
+use stash::{cli::{Args, Commands}, utils::init_tracing, organizer::organise_files, reverter::revert_files};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

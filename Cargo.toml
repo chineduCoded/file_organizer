@@ -1,7 +1,11 @@
 [package]
-name = "file_organizer"
+name = "stash"
 version = "0.1.0"
 edition = "2024"
+
+[[bin]]
+name = "stash"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.99"

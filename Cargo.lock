@@ -626,50 +626,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "file_organizer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "blake3",
- "chrono",
- "clap",
- "color-eyre",
- "colored",
- "dirs",
- "futures",
- "hex",
- "indicatif",
- "infer",
- "libc",
- "lru",
- "mime_guess",
- "notify",
- "num_cpus",
- "once_cell",
- "phf",
- "proptest",
- "rayon",
- "redb",
- "regex",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "sled",
- "sqlx",
- "tempfile",
- "thiserror 2.0.16",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-error",
- "tracing-subscriber",
- "walkdir",
- "windows-sys 0.60.2",
-]
-
-[[package]]
 name = "flume"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2309,6 +2265,50 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stash"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "blake3",
+ "chrono",
+ "clap",
+ "color-eyre",
+ "colored",
+ "dirs",
+ "futures",
+ "hex",
+ "indicatif",
+ "infer",
+ "libc",
+ "lru",
+ "mime_guess",
+ "notify",
+ "num_cpus",
+ "once_cell",
+ "phf",
+ "proptest",
+ "rayon",
+ "redb",
+ "regex",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sled",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-error",
+ "tracing-subscriber",
+ "walkdir",
+ "windows-sys 0.60.2",
+]
 
 [[package]]
 name = "stringprep"

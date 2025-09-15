@@ -1,6 +1,6 @@
 use std::{collections::HashMap, os::unix::fs::PermissionsExt, path::{Path, PathBuf}};
 
-use file_organizer::{metadata::{ClassifiedFileMetadata, FileCategory}, scanner::RawFileMetadata};
+use stash::{metadata::{ClassifiedFileMetadata, FileCategory}, scanner::RawFileMetadata};
 use tempfile::TempDir;
 
 // =============== Classifier Registry Tests ===============

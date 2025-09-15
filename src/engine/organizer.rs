@@ -135,12 +135,16 @@ async fn process_files_concurrently(
         }
     }
 
-    if !dry_run {
+    if dry_run {
+        for (raw, category, dest, _) in &results {
+            println!("Would move {:?} (category: {}) → {:?}", raw.path, category, dest);
+       } 
+    } else {
         db.update_files_batch(&results).await?;
     }
 
     let summary = if dry_run {
-        format!("✅ Dry-run completed: {} files analyzed", total)
+        format!("✅ Dry-run completed: {} files analyzed, {} planned moves", total, results.len())
     } else {
         format!("✅ Organize completed: {} files processed", total)
     };
@@ -167,14 +171,16 @@ async fn process_file(
 ) -> Result<Option<(RawFileMetadata, String, PathBuf, String)>> {
     let classified = registry.classify(&raw).await?;
     let mut destination = PathBuilder::new(&classified)
-        .base(root_dir)
+        .base(&root_dir.join("Organized"))
         .build();
 
     destination.push(raw.path.file_name().unwrap());
 
     if dry_run {
         tracing::info!(target: "organizer", "Would move {:?} to {:?}", raw.path, destination);
-        return Ok(None);
+        return Ok(Some(
+            (raw, classified.category.to_string(), destination, "dry-run".into())
+        ));
     }
 
     let entry = handle_file_movement(raw, &classified.category, destination, mover, hasher).await?;

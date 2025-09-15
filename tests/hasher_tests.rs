@@ -2,7 +2,7 @@
 mod tests {
     use std::io::Write;
 
-    use file_organizer::hasher::{Blake3Hasher, FileHasher, Sha256Hasher};
+    use stash::hasher::{Blake3Hasher, FileHasher, Sha256Hasher};
     use tokio::io::AsyncWriteExt;
     use tempfile::NamedTempFile;
     use sha2::Digest;

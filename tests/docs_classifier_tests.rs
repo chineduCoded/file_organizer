@@ -2,7 +2,7 @@
 mod tests {
     use tempfile::Builder;
     use tokio::fs;
-    use file_organizer::{
+    use stash::{
         registry::Classifier,
         docs_classifier::DocumentClassifier, 
         metadata::{DocumentSubcategory, FileCategory}

@@ -6,7 +6,7 @@ mod tests {
     use std::path::Path;
     use async_trait::async_trait;
 
-    use file_organizer::{
+    use stash::{
         errors::{FileOrganizerError, Result}, 
         metadata::ClassifiedFileMetadata,
         registry::{ClassifierRegistry, Classifier}, 

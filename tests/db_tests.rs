@@ -1,4 +1,4 @@
-use file_organizer::{index::Db, scanner::RawFileMetadata};
+use stash::{index::Db, scanner::RawFileMetadata};
 use tokio::task;
 use std::{path::{Path, PathBuf}, time::SystemTime};
 

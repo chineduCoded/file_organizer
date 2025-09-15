@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use file_organizer::{
+    use stash::{
         executable_classifier::ExecutableClassifier,
         metadata::{FileCategory, ExecutableSubcategory},
         registry::Classifier,

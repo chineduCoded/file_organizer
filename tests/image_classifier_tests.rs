@@ -2,7 +2,7 @@
 mod tests {
     use tempfile::Builder;
     use tokio::fs;
-    use file_organizer::{image_classifier::ImageClassifier, registry::Classifier, metadata::{FileCategory, ImageSubcategory}};
+    use stash::{image_classifier::ImageClassifier, registry::Classifier, metadata::{FileCategory, ImageSubcategory}};
 
     // ---------------------------
     // Unit tests

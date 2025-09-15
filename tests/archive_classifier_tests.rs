@@ -2,8 +2,8 @@ mod test_utils;
 
 #[cfg(test)]
 mod tests {
-    use file_organizer::{archive_classifier::ArchiveClassifier, registry::Classifier};
-    use file_organizer::metadata::{ArchiveSubcategory, FileCategory};
+    use stash::{archive_classifier::ArchiveClassifier, registry::Classifier};
+    use stash::metadata::{ArchiveSubcategory, FileCategory};
 
     use crate::test_utils::create_test_file_with_ext;
 

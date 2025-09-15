@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use file_organizer::metadata::{
+    use stash::metadata::{
         ArchiveSubcategory, AudioSubcategory, ClassifiedFileMetadata, CodeSubcategory,
         DocumentSubcategory, ExecutableSubcategory, FileCategory, ImageSubcategory, VideoSubcategory,
     };
-    use file_organizer::path_builder::PathBuilder;
+    use stash::path_builder::PathBuilder;
 
     #[test]
     fn test_document_subcategory_as_ref() {

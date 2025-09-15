@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use file_organizer::{
+    use stash::{
         code_classifier::CodeClassifier,
         metadata::{CodeSubcategory, FileCategory},
         registry::Classifier,
