@@ -3,7 +3,10 @@ name: Release Builds
 on:
   push:
     tags:
-      - "v*"   # triggers on version tags like v0.1.0
+      - "v*" # Triggers only on version tags like v0.1.0
+
+permissions:
+  contents: write # Needed for GitHub release upload
 
 jobs:
   build:
@@ -16,6 +19,10 @@ jobs:
             artifact_name: linux-x86_64
             ext: tar.gz
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            artifact_name: linux-musl-x86_64
+            ext: tar.gz
+            target: x86_64-unknown-linux-musl
           - os: windows-latest
             artifact_name: windows-x86_64
             ext: zip
@@ -38,22 +45,26 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }}
 
-      - name: Package binary
+      - name: Package binary (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p artifacts
           VERSION=${GITHUB_REF#refs/tags/}
           BIN_NAME="stash"
           BIN_PATH=target/${{ matrix.target }}/release/${BIN_NAME}
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp ${BIN_PATH}.exe artifacts/
-            cd artifacts
-            zip ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.zip ${BIN_NAME}.exe
-          else
-            cp ${BIN_PATH} artifacts/
-            cd artifacts
-            tar -czf ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.tar.gz ${BIN_NAME}
-          fi
-        shell: bash
+          cp ${BIN_PATH} artifacts/
+          cd artifacts
+          tar -czf ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.tar.gz ${BIN_NAME}
+
+      - name: Package binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir artifacts
+          $VERSION="${env:GITHUB_REF}" -replace 'refs/tags/', ''
+          $BIN_NAME="stash.exe"
+          $BIN_PATH="target\${{ matrix.target }}\release\${BIN_NAME}"
+          Copy-Item $BIN_PATH artifacts\
+          Compress-Archive -Path artifacts\$BIN_NAME -DestinationPath "${{ github.workspace }}\stash-$VERSION-${{ matrix.artifact_name }}.zip"
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
