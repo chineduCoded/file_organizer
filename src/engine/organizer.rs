@@ -126,7 +126,7 @@ async fn process_files_concurrently(
     while let Some(join_res) = tasks.next().await {
         match join_res {
             Ok(Ok(Some(entry))) => results.push(entry),
-            Ok(Ok(None)) => {}
+            Ok(Ok(_)) => {}
             Ok(Err(e)) => return Err(e),
             Err(join_err) => {
                 pb.finish_and_clear();

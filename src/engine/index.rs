@@ -35,6 +35,9 @@ impl Db {
         sqlx::query("PRAGMA foreign_keys=ON;").execute(&pool).await?;
         sqlx::query("PRAGMA busy_timeout=5000;").execute(&pool).await?;
 
+        // Add auto-checkpointing every ~1000 pages (~4MB with default 4KB page size)
+        sqlx::query("PRAGMA wal_autocheckpoint=1000;").execute(&pool).await?;
+
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS files (
@@ -311,12 +314,7 @@ impl Db {
     pub async fn save(&self) -> Result<()> {
         let _permit = self.acquire_write_permit().await;
 
-        // checkpoint WAL → flushes write-ahead log into main DB
-        sqlx::query("PRAGMA wal_checkpoint(FULL);")
-            .execute(&self.pool)
-            .await?;
-
-        // Run analyze after checkpoint
+        // No more forced checkpoint → SQLite handles it incrementally
         sqlx::query("ANALYZE;")
         .execute(&self.pool)
         .await?;

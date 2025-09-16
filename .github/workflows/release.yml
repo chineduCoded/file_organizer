@@ -6,77 +6,203 @@ on:
       - "v*" # Triggers only on version tags like v0.1.0
 
 permissions:
-  contents: write # Needed for GitHub release upload
+  contents: write
+  packages: read
+
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  build-and-release:
+    name: Build on ${{ matrix.os }} (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             artifact_name: linux-x86_64
             ext: tar.gz
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
+            strip_binary: true
+          - os: ubuntu-22.04
             artifact_name: linux-musl-x86_64
             ext: tar.gz
             target: x86_64-unknown-linux-musl
-          - os: windows-latest
+            strip_binary: true
+          - os: windows-2022
             artifact_name: windows-x86_64
             ext: zip
             target: x86_64-pc-windows-msvc
-          - os: macos-latest
+            strip_binary: false
+          - os: macos-13
             artifact_name: macos-x86_64
             ext: tar.gz
             target: x86_64-apple-darwin
+            strip_binary: true
+          - os: macos-13
+            artifact_name: macos-aarch64
+            ext: tar.gz
+            target: aarch64-apple-darwin
+            strip_binary: true
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
 
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install MUSL tools
+      - name: Install MUSL tools (for musl target)
         if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: |
+          cargo build --release --locked --target ${{ matrix.target }}
+          echo "Build completed for ${{ matrix.target }}"
+
+      - name: Strip binary (Unix systems)
+        if: matrix.strip_binary && runner.os != 'Windows'
+        run: |
+          strip target/${{ matrix.target }}/release/stash* 2>/dev/null || true
+
+      - name: Verify binary exists
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            if (Test-Path "target/${{ matrix.target }}/release/stash.exe") {
+              echo "Binary exists"
+            } else {
+              echo "Binary not found!"
+              Get-ChildItem -Recurse target | Where-Object { $_.Name -like "*stash*" }
+              exit 1
+            }
+          else
+            if [ -f "target/${{ matrix.target }}/release/stash" ]; then
+              echo "Binary exists"
+              file "target/${{ matrix.target }}/release/stash"
+            else
+              echo "Binary not found!"
+              find target -name "*stash*" -type f
+              exit 1
+            fi
+          fi
 
       - name: Package binary (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p artifacts
-          VERSION=${GITHUB_REF#refs/tags/}
+          mkdir -p release-artifacts
+          VERSION=${GITHUB_REF#refs/tags/v}
           BIN_NAME="stash"
-          BIN_PATH=target/${{ matrix.target }}/release/${BIN_NAME}
-          cp ${BIN_PATH} artifacts/
-          cd artifacts
-          tar -czf ../${BIN_NAME}-${VERSION}-${{ matrix.artifact_name }}.tar.gz ${BIN_NAME}
+          BIN_PATH="target/${{ matrix.target }}/release/${BIN_NAME}"
+          
+          # Create directory structure for archive
+          mkdir -p "stash-${VERSION}"
+          cp "${BIN_PATH}" "stash-${VERSION}/"
+          cp LICENSE README.md "stash-${VERSION}/" 2>/dev/null || true
+          
+          # Create archive
+          tar -czf "release-artifacts/stash-${VERSION}-${{ matrix.artifact_name }}.${{ matrix.ext }}" "stash-${VERSION}/"
+          
+          # Create checksum
+          cd "stash-${VERSION}"
+          sha256sum "${BIN_NAME}" > "../release-artifacts/stash-${VERSION}-${{ matrix.artifact_name }}.sha256" 2>/dev/null || shasum -a 256 "${BIN_NAME}" > "../release-artifacts/stash-${VERSION}-${{ matrix.artifact_name }}.sha256"
 
       - name: Package binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          $VERSION = $env:GITHUB_REF -replace '^refs/tags/', ''
+          $VERSION = $env:GITHUB_REF -replace '^refs/tags/v', ''
           $BIN_NAME = "stash.exe"
           $BIN_PATH = "target\${{ matrix.target }}\release\$BIN_NAME"
-          Copy-Item $BIN_PATH artifacts\
-          Compress-Archive -Path artifacts\$BIN_NAME -DestinationPath "stash-$VERSION-${{ matrix.artifact_name }}.zip"
+          
+          # Create directory structure
+          New-Item -ItemType Directory -Force -Path "stash-$VERSION" | Out-Null
+          Copy-Item $BIN_PATH "stash-$VERSION\"
+          Copy-Item LICENSE "stash-$VERSION\" -ErrorAction SilentlyContinue
+          Copy-Item README.md "stash-$VERSION\" -ErrorAction SilentlyContinue
+          
+          # Create archive
+          Compress-Archive -Path "stash-$VERSION" -DestinationPath "release-artifacts/stash-$VERSION-${{ matrix.artifact_name }}.zip"
+          
+          # Create checksum
+          $checksum = Get-FileHash $BIN_PATH -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+          $checksum + "  " + $BIN_NAME | Out-File -Encoding UTF8 "release-artifacts/stash-$VERSION-${{ matrix.artifact_name }}.sha256"
 
-      - name: Upload release asset
+      - name: List artifacts for verification
+        run: |
+          echo "Generated artifacts:"
+          ls -la release-artifacts/ || dir release-artifacts/
+
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            stash-*.zip
-            stash-*.tar.gz
+            release-artifacts/stash-*.${{ matrix.ext }}
+            release-artifacts/stash-*.sha256
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        timeout-minutes: 10
+
+  create-release-notes:
+    name: Create Release Notes
+    runs-on: ubuntu-22.04
+    needs: build-and-release
+    if: success()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ github.ref }}^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, using first commit"
+            CHANGES=$(git log --oneline --pretty=format:"- %s" ${{ github.ref }})
+          else
+            CHANGES=$(git log --oneline --pretty=format:"- %s" $PREVIOUS_TAG..${{ github.ref }})
+          fi
+          
+          echo "## Release v$VERSION" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Changes" >> release_notes.md
+          echo "$CHANGES" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Downloads" >> release_notes.md
+          echo "Binary artifacts are attached to this release." >> release_notes.md
+
+      - name: Update release with notes
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
