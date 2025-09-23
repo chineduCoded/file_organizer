@@ -37,7 +37,10 @@ pub async fn organise_files(
     let db_path = if dry_run {
         PathBuf::from(":memory:")
     } else {
-        default_db_path()
+        let path = default_db_path()?;
+        println!("Using database path: {:?}", path);
+        println!("Database directory exists: {}", path.parent().unwrap().exists());
+        path
     };
 
     let db = Arc::new(Db::new(&db_path).await?);

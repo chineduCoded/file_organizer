@@ -1,17 +1,16 @@
-use std::{path::PathBuf, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{fs, path::PathBuf, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 use chrono::{DateTime, Utc, Datelike};
 use indicatif::{ProgressBar, ProgressStyle};
 use tracing_subscriber::{fmt, EnvFilter, prelude::*};
 use tracing_appender::rolling;
-use dirs::data_local_dir;
 
 use crate::{
     archive_classifier::ArchiveClassifier, 
     audio_classifier::AudioClassifier, 
     code_classifier::CodeClassifier, 
     docs_classifier::DocumentClassifier,
-    errors::FileOrganizerError, 
+    errors::{FileOrganizerError, Result}, 
     executable_classifier::ExecutableClassifier, 
     generic::GenericClassifier, 
     image_classifier::ImageClassifier, 
@@ -62,16 +61,64 @@ pub fn make_progress(total: u64, msg: &str) -> ProgressBar {
     pb
 }
 
-pub fn default_db_path() -> PathBuf {
-    let mut path = data_local_dir().unwrap_or_else(|| PathBuf::from("."));
-    path.push("file_organizer");
-    if let Err(e) = std::fs::create_dir_all(&path) {
-        tracing::warn!(?path, error=%e, "Failed to create data directory; continuing, but DB open may fail");
-    }
-    path.push("file_organizer.db");
+pub fn default_db_path() -> Result<PathBuf> {
+    // Candidate directories in order of preference
+    let candidates = [
+        dirs::data_local_dir(),  // Best: platform-specific writable data dir
+        dirs::home_dir(),        // Good fallback: user home directory
+        Some(std::env::temp_dir()), // Last resort: temp directory
+    ];
 
-    path
+    for candidate in candidates.iter().flatten() {
+        let path = candidate.join("file_organizer");
+        // Ensure directory exists
+        if let Err(e) = fs::create_dir_all(&path) {
+            tracing::debug!("Failed to create directory {:?}: {}", path, e);
+            continue; // try next fallback
+        }
+
+        // Test writability safely
+        let test_file = path.join(".write_test_tmp");
+        match fs::File::create(&test_file) {
+            Ok(_) => {
+                let _ = fs::remove_file(&test_file); // clean up
+                return Ok(path.join("file_organizer.db"));
+            }
+            Err(e) => {
+                tracing::debug!("Directory {:?} not writable: {}", path, e);
+                continue; // try next fallback
+            }
+        }
+
+    }
+
+    // All fallbacks failed
+    Err(FileOrganizerError::Io(std::io::Error::new(
+        std::io::ErrorKind::PermissionDenied,
+        "No writable directory found for the database (tried data_local_dir, data_dir, home, temp dir)",
+    )))
 }
+
+/// Expands `~` and environment variables in paths, then returns an absolute path.
+pub fn expand_tilde<P: AsRef<str>>(path: P) -> PathBuf {
+    // Expand tilde (~) to home directory
+    let expanded = shellexpand::tilde(path.as_ref());
+
+    // Expand any environment variables, e.g., $HOME or %USERPROFILE%
+    let expanded_env = shellexpand::env(&expanded).unwrap_or(expanded.clone());
+
+    let mut path_buf = PathBuf::from(expanded_env.to_string());
+
+    // If relative, make it absolute relative to current working dir
+    if !path_buf.is_absolute() {
+        if let Ok(current_dir) = std::env::current_dir() {
+            path_buf = current_dir.join(path_buf);
+        }
+    }
+
+    path_buf
+}
+
 
 pub fn detect_mime(ext: &str) -> String {
     let mime = mime_guess::from_ext(ext).first_or_octet_stream();

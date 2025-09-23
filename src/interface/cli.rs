@@ -32,4 +32,16 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         no_cleanup: bool,
     },
+    Db {
+        #[command(subcommand)]
+        action: DbCommands,
+    }
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum DbCommands {
+    /// Optimize the database (VACUUM + ANALYZE)
+    Vacuum,
+    /// Show database information (path, size, modified_dt, tables, counts)
+    Status,
 }

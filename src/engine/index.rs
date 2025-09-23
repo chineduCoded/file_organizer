@@ -1,9 +1,10 @@
 use std::{path::{Path, PathBuf}, sync::Arc, time::SystemTime};
 
+use chrono::{DateTime, Local};
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Row, Sqlite, Transaction};
-use tokio::sync::Semaphore;
+use tokio::{fs, sync::Semaphore};
 
-use crate::{errors::Result, scanner::RawFileMetadata, utils::{from_unix, to_unix}};
+use crate::{errors::{FileOrganizerError, Result}, scanner::RawFileMetadata, utils::{from_unix, to_unix}};
 
 
 #[derive(Clone)]
@@ -14,8 +15,32 @@ pub struct Db {
 
 impl Db {
     pub async fn new(db_path: &Path) -> Result<Self> {
-        if let Some(parent) = db_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+        println!("DB path: {:?}", db_path);
+
+        // Ensure parent directory exists for file-based DBs
+        if db_path.to_string_lossy() != ":memory:" {
+            if let Some(parent) = db_path.parent() {
+                tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                    FileOrganizerError::Io(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        format!("Failed to create database directory {:?}: {}", parent, e),
+                    ))
+                })?;
+
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Ok(metadata) = fs::metadata(parent).await {
+                        let mut perms = metadata.permissions();
+                        if (perms.mode() & 0o700) != 0o700 {
+                            perms.set_mode(perms.mode() | 0o700);
+                            if let Err(e) = fs::set_permissions(parent, perms).await {
+                                tracing::warn!("Failed to set permissions on {:?}: {}", parent, e);
+                            }
+                        }
+                    } 
+                }
+            }
         }
 
         let url = if db_path.to_string_lossy() == ":memory:" {
@@ -27,12 +52,20 @@ impl Db {
             .max_connections(5)
             .acquire_timeout(std::time::Duration::from_secs(10))
             .connect(&url)
-            .await?;
+            .await
+            .map_err(|e| {
+                FileOrganizerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    format!("Failed to connect to database at {:?}: {}", db_path, e),
+                ))
+            })?;
 
         // --- Pragmas recommended for concurrent access ---
         sqlx::query("PRAGMA journal_mode=WAL;").execute(&pool).await?;
         sqlx::query("PRAGMA synchronous=NORMAL;").execute(&pool).await?;
         sqlx::query("PRAGMA foreign_keys=ON;").execute(&pool).await?;
+        sqlx::query("PRAGMA temp_store=MEMORY;").execute(&pool).await?;
+        sqlx::query("PRAGMA mmap_size=30000000000;").execute(&pool).await?;
         sqlx::query("PRAGMA busy_timeout=5000;").execute(&pool).await?;
 
         // Add auto-checkpointing every ~1000 pages (~4MB with default 4KB page size)
@@ -79,6 +112,7 @@ impl Db {
         Ok(self.write_limit.clone().acquire_owned().await?)
     }
 
+    /// Insert/update a single file record (delegates to batch method).
     pub async fn update_file(
         &self,
         meta: &RawFileMetadata,
@@ -86,59 +120,66 @@ impl Db {
         dest: &Path,
         hash: &str,
     ) -> Result<()> {
-        let _permit = self.acquire_write_permit().await?;
-
-        let modified = to_unix(meta.modified);
-        let created = to_unix(meta.created);
-        let accessed = to_unix(meta.accessed);
-
-        sqlx::query(
-            r#"
-            INSERT INTO files (path, size, created, modified, accessed, category, dest_path, hash, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
-            ON CONFLICT(path) DO UPDATE SET
-                size=excluded.size,
-                created=excluded.created,
-                modified=excluded.modified,
-                accessed=excluded.accessed,
-                category=excluded.category,
-                dest_path=excluded.dest_path,
-                hash=excluded.hash,
-                updated_at=strftime('%s','now');
-            "#,
-        )
-        .bind(meta.path.to_string_lossy().to_string())
-        .bind(meta.size as i64)
-        .bind(created)
-        .bind(modified)
-        .bind(accessed)
-        .bind(category)
-        .bind(dest.to_string_lossy().to_string())
-        .bind(hash)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
+        self.update_files_batch(&[(meta.clone(), category.to_string(), dest.to_path_buf(), hash.to_string())]).await
     }
+
 
     pub async fn update_files_batch(
         &self,
         entries: &[(RawFileMetadata, String, std::path::PathBuf, String)],
     ) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
         let _permit = self.acquire_write_permit().await?;
 
-        let mut tx = self.pool.begin().await?;
+        // Each row uses 8 bind params (path, size, created, modified, accessed, category, dest_path, hash)
+        const PARAMS_PER_ROW: usize = 8;
+        const MAX_BIND_VARS: usize = 999; // default SQLite limit
+        let max_rows_per_chunk = MAX_BIND_VARS / PARAMS_PER_ROW;
+        let chunk_size = std::cmp::min(max_rows_per_chunk, 100); // cap to 100 for safety
 
-        for (meta, category, dest, hash) in entries {
-            let modified = to_unix(meta.modified);
-            let created  = to_unix(meta.created);
-            let accessed = to_unix(meta.accessed);
+        for chunk in entries.chunks(chunk_size) {
+            // Build SQL with N "(?,...,strftime('%s','now'))" groups
+            let mut sql = String::from(
+                "INSERT INTO files (path, size, created, modified, accessed, category, dest_path, hash, updated_at) VALUES ",
+            );
+            let mut binds: Vec<(
+                String,
+                i64,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                String,
+                String,
+                String,
+            )> = Vec::with_capacity(chunk.len());
 
-            sqlx::query(
-                r#"
-                INSERT INTO files (path, size, created, modified, accessed, category, dest_path, hash, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
-                ON CONFLICT(path) DO UPDATE SET
+            for (i, (meta, category, dest, hash)) in chunk.iter().enumerate() {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str("(?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))");
+
+                let created = to_unix(meta.created);
+                let modified = to_unix(meta.modified);
+                let accessed = to_unix(meta.accessed);
+
+                binds.push((
+                    meta.path.to_string_lossy().to_string(),
+                    meta.size as i64,
+                    created,
+                    modified,
+                    accessed,
+                    category.clone(),
+                    dest.to_string_lossy().to_string(),
+                    hash.clone(),
+                ));
+            }
+
+            sql.push_str(
+                " ON CONFLICT(path) DO UPDATE SET
                     size=excluded.size,
                     created=excluded.created,
                     modified=excluded.modified,
@@ -146,21 +187,28 @@ impl Db {
                     category=excluded.category,
                     dest_path=excluded.dest_path,
                     hash=excluded.hash,
-                    updated_at=strftime('%s','now');
-                "#,
-            )
-            .bind(meta.path.to_string_lossy().to_string())
-            .bind(meta.size as i64)
-            .bind(created)
-            .bind(modified)
-            .bind(accessed)
-            .bind(category)
-            .bind(dest.to_string_lossy().to_string())
-            .bind(hash)
-            .execute(&mut *tx)
-            .await?;
+                    updated_at=strftime('%s','now');",
+            );
+
+            // Bind all params in order
+            let mut q = sqlx::query(&sql);
+            for (path, size, created, modified, accessed, category, dest_path, hash) in binds {
+                q = q
+                    .bind(path)
+                    .bind(size)
+                    .bind(created) 
+                    .bind(modified)  
+                    .bind(accessed)
+                    .bind(category)
+                    .bind(dest_path)
+                    .bind(hash);
+            }
+
+            // Execute chunk in a transaction
+            let mut tx = self.pool.begin().await?;
+            q.execute(&mut *tx).await?;
+            tx.commit().await?;
         }
-        tx.commit().await?;
 
         Ok(())
     }
@@ -250,7 +298,7 @@ impl Db {
 
     /// Update a file entry in the database (non-transactional).
     pub async fn update_file_entry(&self, entry: &DbFileEntry) -> Result<()> {
-        let _permit = self.acquire_write_permit().await;
+        let _permit = self.acquire_write_permit().await?;
         
         sqlx::query(
             r#"
@@ -300,14 +348,46 @@ impl Db {
         Ok(())
     }
 
-    /// Run periodic maintenance: vacuum + analyze
-    pub async fn maintenance(&self) -> Result<()> {
-        // Rebuild database file to reclaim space
+    /// Print database information (file path, size, counts).
+    pub async fn status(db_path: &Path) -> Result<()> {
+        if !fs::try_exists(db_path).await? {
+            println!("❌ Database does not exist at {:?}", db_path);
+            return Ok(());
+        }
+
+        // Get file metadata
+        let metadata = fs::metadata(db_path).await?;
+        let size_kb = metadata.len() as f64 / 1024.0;
+
+        // Last modified
+        let modified_time = metadata.modified()?;
+        let datetime: DateTime<Local> = modified_time.into();
+        let modified_str = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        // Connect temporarily to query counts
+        let db = Db::new(db_path).await?;
+        let files_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM files;")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap_or((0,));
+        let actions_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM actions;")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap_or((0,));
+
+        println!("📂 Database path : {:?}", db_path);
+        println!("📏 File size     : {:.2} KB", size_kb);
+        println!("🕒 Last modified   : {}", modified_str);
+        println!("📊 Files tracked : {}", files_count.0);
+        println!("📊 Actions saved : {}", actions_count.0);
+
+        Ok(())
+    }
+
+    /// Run VACUUM + ANALYZE to optimize.
+    pub async fn vacuum(&self) -> Result<()> {
         sqlx::query("VACUUM;").execute(&self.pool).await?;
-
-        // Update statistics so query planner knows to use indexes
         sqlx::query("ANALYZE;").execute(&self.pool).await?;
-
         Ok(())
     }
 

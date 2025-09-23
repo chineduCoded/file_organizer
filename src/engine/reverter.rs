@@ -46,7 +46,8 @@ pub async fn revert_files(
 ) -> Result<()> {
     validate_dir(&root_dir).await?;
 
-    let db = Arc::new(Db::new(&default_db_path()).await?);
+    let db_path = default_db_path()?; 
+    let db = Arc::new(Db::new(&db_path).await?);
     let mover = Arc::new(FileMover::new());
     let hasher = create_hasher(HashAlgo::Blake3);
 
@@ -55,7 +56,7 @@ pub async fn revert_files(
     let files: Vec<DbFileEntry> = db.get_all_files()
         .await?
         .into_iter()
-        .filter(|f| f.path.starts_with(root_dir)) // Only revert inside root_dir
+        .filter(|f| f.dest_path.starts_with(root_dir)) // Only revert inside root_dir
         .filter(|f| seen.insert(f.dest_path.clone()))
         .collect();
 
@@ -107,8 +108,18 @@ pub async fn revert_files(
         pb.inc(1);
     }
 
-    pb.finish_with_message(format!("♻️ Revert completed: {} moved, {} candidates.", moved, total));
-    tracing::info!(target: "reverter", "Revert completed: {} moved, {} candidates.", moved, total);
+    pb.finish_with_message(format!(
+        "♻️ Revert completed: {} moved, {} skipped, {} candidates.",
+        moved,
+        total - moved,
+        total
+    ));
+    tracing::info!(
+        target: "reverter", "Revert completed: {} moved, {} skipped, {} candidates.", 
+        moved, 
+        total - moved,
+        total
+    );
 
     if cleanup {
         if let Err(e) = cleanup_empty_dirs(root_dir).await {
