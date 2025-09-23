@@ -191,6 +191,6 @@ pub fn humanize(e: &FileOrganizerError) -> String {
         FileOrganizerError::Regex { pattern, source } => {
             format!("Regex error in `{}`: {}", pattern, source)
         }
-        other => other.to_string(), // fall back to #[error(..)]
+        other => other.to_string(),
     }
 }

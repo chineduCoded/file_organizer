@@ -61,13 +61,18 @@ pub async fn organise_files(
     Ok(())
 }
 
-/// Scans files from the root directory using a blocking task
+/// Scans only top-level files from the root directory (ignores subdirs)
 async fn scan_files(root_dir: &Path) -> Result<Vec<RawFileMetadata>> {
     let root_dir = root_dir.to_path_buf();
     
     let result = tokio::task::spawn_blocking(move || {
-        Scanner::new(root_dir, Default::default())
+        Scanner::new(root_dir.clone(), Default::default())
             .filter_ok()
+            .filter(|raw| {
+                // Keep only files directly under `root_dir`
+                raw.path.is_file() &&
+                raw.path.parent() == Some(&root_dir)
+            })
             .collect::<Vec<_>>()
     })
     .await?;

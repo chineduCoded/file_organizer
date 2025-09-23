@@ -16,7 +16,6 @@ fn main() -> anyhow::Result<()> {
                     let path_str = path.to_str()
                         .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
                     let path = expand_tilde(path_str);
-                    println!("Expanded path: {:?}", path);
                     organise_files(Path::new(&path), dry_run).await?;
 
                     // Every Nth run, vacuum the DB
@@ -33,7 +32,6 @@ fn main() -> anyhow::Result<()> {
                 let root_dir_str = root_dir.to_str()
                     .ok_or_else(|| anyhow::anyhow!("Root directory path contains invalid UTF-8"))?;
                 let root_dir = expand_tilde(root_dir_str);
-                println!("Expanded path: {:?}", root_dir);
                 revert_files(&root_dir, !no_cleanup).await?;
             }
             Commands::Db { action } => {
@@ -42,7 +40,6 @@ fn main() -> anyhow::Result<()> {
                         let db_path = default_db_path().await?;
                         let db = Db::new(&db_path).await?;
                         db.vacuum().await?;
-                        println!("✅ Database vacuum completed.");
                     }
                     DbCommands::Status => {
                         let db_path = default_db_path().await?;
