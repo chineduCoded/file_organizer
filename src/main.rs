@@ -13,12 +13,14 @@ fn main() -> anyhow::Result<()> {
                 if watch {
                     println!("Watch mode not yet implemented");
                 } else {
-                    let path = expand_tilde(path.to_str().unwrap());
+                    let path_str = path.to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
+                    let path = expand_tilde(path_str);
                     println!("Expanded path: {:?}", path);
                     organise_files(Path::new(&path), dry_run).await?;
 
                     // Every Nth run, vacuum the DB
-                    let db_path = default_db_path()?;
+                    let db_path = default_db_path().await?;
                     let db = Db::new(&db_path).await?;
                     if rand::random::<u8>() % 20 == 0  {
                         if let Err(e) = db.vacuum().await {
@@ -28,20 +30,22 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             Commands::Revert { root_dir, no_cleanup } => {
-                let root_dir = expand_tilde(root_dir.to_str().unwrap());
+                let root_dir_str = root_dir.to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Root directory path contains invalid UTF-8"))?;
+                let root_dir = expand_tilde(root_dir_str);
                 println!("Expanded path: {:?}", root_dir);
                 revert_files(&root_dir, !no_cleanup).await?;
             }
             Commands::Db { action } => {
                 match action {
                     DbCommands::Vacuum => {
-                        let db_path = default_db_path()?;
+                        let db_path = default_db_path().await?;
                         let db = Db::new(&db_path).await?;
                         db.vacuum().await?;
                         println!("✅ Database vacuum completed.");
                     }
                     DbCommands::Status => {
-                        let db_path = default_db_path()?;
+                        let db_path = default_db_path().await?;
                         Db::status(&db_path).await?;
                     }
                 }

@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{path::PathBuf, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 use chrono::{DateTime, Utc, Datelike};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -61,28 +61,30 @@ pub fn make_progress(total: u64, msg: &str) -> ProgressBar {
     pb
 }
 
-pub fn default_db_path() -> Result<PathBuf> {
+pub async fn default_db_path() -> Result<PathBuf> {
     // Candidate directories in order of preference
     let candidates = [
         dirs::data_local_dir(),  // Best: platform-specific writable data dir
-        dirs::home_dir(),        // Good fallback: user home directory
+        dirs::home_dir(), // Good: home dir
         Some(std::env::temp_dir()), // Last resort: temp directory
     ];
 
     for candidate in candidates.iter().flatten() {
         let path = candidate.join("file_organizer");
         // Ensure directory exists
-        if let Err(e) = fs::create_dir_all(&path) {
+        if let Err(e) = tokio::fs::create_dir_all(&path).await {
             tracing::debug!("Failed to create directory {:?}: {}", path, e);
             continue; // try next fallback
         }
 
         // Test writability safely
         let test_file = path.join(".write_test_tmp");
-        match fs::File::create(&test_file) {
+        match tokio::fs::File::create(&test_file).await {
             Ok(_) => {
-                let _ = fs::remove_file(&test_file); // clean up
-                return Ok(path.join("file_organizer.db"));
+                let _ = tokio::fs::remove_file(&test_file); // clean up
+                let db_path = path.join("file_organizer.db");
+                tracing::debug!("Using database path: {:?}", db_path);
+                return Ok(db_path);
             }
             Err(e) => {
                 tracing::debug!("Directory {:?} not writable: {}", path, e);
@@ -95,7 +97,7 @@ pub fn default_db_path() -> Result<PathBuf> {
     // All fallbacks failed
     Err(FileOrganizerError::Io(std::io::Error::new(
         std::io::ErrorKind::PermissionDenied,
-        "No writable directory found for the database (tried data_local_dir, data_dir, home, temp dir)",
+        "No writable directory found for the database (tried data_local, home, temp dir)",
     )))
 }
 

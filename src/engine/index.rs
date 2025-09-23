@@ -15,8 +15,6 @@ pub struct Db {
 
 impl Db {
     pub async fn new(db_path: &Path) -> Result<Self> {
-        println!("DB path: {:?}", db_path);
-
         // Ensure parent directory exists for file-based DBs
         if db_path.to_string_lossy() != ":memory:" {
             if let Some(parent) = db_path.parent() {
@@ -30,23 +28,30 @@ impl Db {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    if let Ok(metadata) = fs::metadata(parent).await {
-                        let mut perms = metadata.permissions();
-                        if (perms.mode() & 0o700) != 0o700 {
-                            perms.set_mode(perms.mode() | 0o700);
-                            if let Err(e) = fs::set_permissions(parent, perms).await {
-                                tracing::warn!("Failed to set permissions on {:?}: {}", parent, e);
-                            }
-                        }
-                    } 
+                    let perms = std::fs::Permissions::from_mode(0o700);
+                    if let Err(e) = fs::set_permissions(parent, perms).await {
+                        tracing::warn!("Failed to set permissions on {:?}: {}", parent, e);
+                    }
                 }
+            }
+
+            if !fs::try_exists(db_path).await? {
+                fs::File::create(db_path).await.map_err(|e| {
+                    FileOrganizerError::Io(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        format!("Failed to create database file {:?}: {}", db_path, e),
+                    ))
+                })?;
             }
         }
 
         let url = if db_path.to_string_lossy() == ":memory:" {
             "sqlite::memory:".to_string()
         } else {
-            format!("sqlite://{}", db_path.display())
+            let abs = db_path
+                .canonicalize()
+                .map_err(|e| FileOrganizerError::Io(e))?;
+            format!("sqlite:///{}", abs.display())
         };
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
@@ -65,7 +70,8 @@ impl Db {
         sqlx::query("PRAGMA synchronous=NORMAL;").execute(&pool).await?;
         sqlx::query("PRAGMA foreign_keys=ON;").execute(&pool).await?;
         sqlx::query("PRAGMA temp_store=MEMORY;").execute(&pool).await?;
-        sqlx::query("PRAGMA mmap_size=30000000000;").execute(&pool).await?;
+        // Use 256MB as a conservative default, make configurable if needed
+        sqlx::query("PRAGMA mmap_size=268435456;").execute(&pool).await?;
         sqlx::query("PRAGMA busy_timeout=5000;").execute(&pool).await?;
 
         // Add auto-checkpointing every ~1000 pages (~4MB with default 4KB page size)
@@ -356,7 +362,7 @@ impl Db {
         }
 
         // Get file metadata
-        let metadata = fs::metadata(db_path).await?;
+        let metadata = fs::metadata(&db_path).await?;
         let size_kb = metadata.len() as f64 / 1024.0;
 
         // Last modified

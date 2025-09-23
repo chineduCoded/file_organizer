@@ -37,9 +37,11 @@ pub async fn organise_files(
     let db_path = if dry_run {
         PathBuf::from(":memory:")
     } else {
-        let path = default_db_path()?;
-        println!("Using database path: {:?}", path);
-        println!("Database directory exists: {}", path.parent().unwrap().exists());
+        let path = default_db_path().await?;
+        tracing::debug!(target: "organizer", "Using database path: {:?}", path);
+        if let Some(parent) = path.parent() {
+            tracing::debug!(target: "organizer", "Database directory exists: {}", parent.exists());
+        }
         path
     };
 

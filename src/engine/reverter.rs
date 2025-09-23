@@ -46,7 +46,7 @@ pub async fn revert_files(
 ) -> Result<()> {
     validate_dir(&root_dir).await?;
 
-    let db_path = default_db_path()?; 
+    let db_path = default_db_path().await?; 
     let db = Arc::new(Db::new(&db_path).await?);
     let mover = Arc::new(FileMover::new());
     let hasher = create_hasher(HashAlgo::Blake3);
