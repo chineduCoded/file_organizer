@@ -87,7 +87,7 @@ jobs:
             mkdir "$DIR"
             cp "$BIN" LICENSE README.md -t "$DIR" 2>/dev/null || true
             tar -czf "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.${{ matrix.ext }}" "$DIR"
-            if [ "${{ runner.os }}" = "macOS" ]; then
+            if [ "${{ matrix.os }}" = "macos-13" ]; then
               shasum -a 256 "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
             else
               sha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
