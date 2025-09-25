@@ -68,6 +68,9 @@ jobs:
       - name: Strip binary
         if: runner.os != 'Windows'
         run: strip target/${{ matrix.target }}/release/${{ env.BIN_NAME }} || true
+      - name: Install sha256sum on macOS
+        if: runner.os == 'macOS'
+        run: brew install coreutils
 
       - name: Package
         shell: bash
