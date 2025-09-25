@@ -90,7 +90,10 @@ jobs:
             mkdir "$DIR"
             cp "$BIN" LICENSE README.md -t "$DIR" 2>/dev/null || true
             tar -czf "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.${{ matrix.ext }}" "$DIR"
-            sha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              gsha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
+            else
+              sha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
           fi
 
       - uses: actions/upload-artifact@v4
