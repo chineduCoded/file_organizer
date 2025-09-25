@@ -86,8 +86,8 @@ jobs:
             DIR="stash-$VERSION"
             mkdir "$DIR"
             cp "$BIN" LICENSE README.md -t "$DIR" 2>/dev/null || true
-            powershell Compress-Archive -Path "$DIR" -DestinationPath "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.zip"
-            (Get-FileHash $BIN -Algorithm SHA256).Hash | Out-File -Encoding ASCII "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
+            powershell -NoLogo -NoProfile -Command "Compress-Archive -Path '$DIR' -DestinationPath '$OUT_DIR/stash-$VERSION-${{ matrix.target }}.zip'"
+            powershell -NoLogo -NoProfile -Command "(Get-FileHash '$BIN' -Algorithm SHA256).Hash | Out-File -Encoding ASCII '$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256'"
           else
             DIR="stash-$VERSION"
             mkdir "$DIR"
