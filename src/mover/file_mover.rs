@@ -79,7 +79,7 @@ impl FileMover {
     pub async fn copy_file(&self, src: &Path, dest: &Path) -> Result<()> {
         self.ensure_parent_dir(dest).await?;
         
-        #[cfg(unix)]
+        #[cfg(target_os = "linux")]
         {
             if let Err(e) = self.copy_file_unix(src, dest).await {
                 debug!(error = ?e, "sendfile failed, falling back to buffered copy");
@@ -100,7 +100,7 @@ impl FileMover {
         }
 
         // Fallback for other platforms (e.g., WASM, embedded)
-        #[cfg(not(any(unix, windows)))]
+        #[cfg(not(any(target_os = "linux", windows)))]
         {
             self.buffered_copy(src, dest).await
         }
@@ -128,7 +128,7 @@ impl FileMover {
     // ----------- Platform-specific fast paths -----------
 
     /// Unix: use rustix::fs::sendfile
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     async fn copy_file_unix(&self, src: &Path, dest: &Path) -> Result<()> {
         use std::os::fd::AsFd;
         use rustix::fs::sendfile;
