@@ -68,9 +68,6 @@ jobs:
       - name: Strip binary
         if: runner.os != 'Windows'
         run: strip target/${{ matrix.target }}/release/${{ env.BIN_NAME }} || true
-      - name: Install sha256sum on macOS
-        if: runner.os == 'macOS'
-        run: brew install coreutils
 
       - name: Package
         shell: bash
@@ -91,7 +88,7 @@ jobs:
             cp "$BIN" LICENSE README.md -t "$DIR" 2>/dev/null || true
             tar -czf "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.${{ matrix.ext }}" "$DIR"
             if [ "${{ runner.os }}" = "macOS" ]; then
-              gsha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
+              shasum -a 256 "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
             else
               sha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
             fi
