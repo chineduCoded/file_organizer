@@ -94,6 +94,7 @@ jobs:
               gsha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
             else
               sha256sum "$BIN" > "$OUT_DIR/stash-$VERSION-${{ matrix.target }}.sha256"
+            fi
           fi
 
       - uses: actions/upload-artifact@v4
