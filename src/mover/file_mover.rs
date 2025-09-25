@@ -89,6 +89,12 @@ impl FileMover {
             }
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            // macOS doesn’t support rustix::sendfile
+            self.buffered_copy(src, dest).await
+        }
+
         #[cfg(windows)]
         {
             if let Err(e) = self.copy_file_windows(src, dest).await {
@@ -100,7 +106,7 @@ impl FileMover {
         }
 
         // Fallback for other platforms (e.g., WASM, embedded)
-        #[cfg(not(any(target_os = "linux", windows)))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
         {
             self.buffered_copy(src, dest).await
         }
