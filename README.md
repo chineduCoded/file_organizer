@@ -1,7 +1,10 @@
+Here’s an **updated README** that covers both **prebuilt releases** and **build from source**, while keeping your nice structure 👇
+
+````markdown
 # 📦 Stash – Smart File Organizer
 
-Stash is a fast, async Rust-powered file organizer.
-It scans a target directory, classifies files by type, and moves them into a structured `Organized/` folder.
+Stash is a fast, async Rust-powered file organizer.  
+It scans a target directory, classifies files by type, and moves them into a structured `Organized/` folder.  
 It also supports **dry runs** (simulation mode) and **revert** (undo last changes).
 
 ---
@@ -18,6 +21,19 @@ It also supports **dry runs** (simulation mode) and **revert** (undo last change
 ---
 
 ## ⚙️ Installation
+
+### Option 1 – Download Prebuilt Binary
+Grab the latest release from [GitHub Releases](https://github.com/chineduCoded/file_organizer/tags).
+
+Example (Linux):
+
+```bash
+wget https://github.com/chineduCoded/file_organizer/releases/download/v1.0.0/stash-v1.0.0-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf stash-v1.0.0-x86_64-unknown-linux-gnu.tar.gz
+./stash --help
+````
+
+### Option 2 – Build from Source
 
 Clone and build:
 

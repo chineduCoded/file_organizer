@@ -7,6 +7,7 @@ use tempfile::TempDir;
 
 // Helper function to create a RawFileMetadata for testing
 
+#[allow(dead_code)]
 pub fn create_test_file(path: &str, size: u64) -> RawFileMetadata {
     RawFileMetadata {
         path: PathBuf::from(path),
@@ -22,6 +23,7 @@ pub fn create_test_file(path: &str, size: u64) -> RawFileMetadata {
 }
 
 /// Helper: create a dummy file with the given extension
+#[allow(dead_code)]
 pub fn create_test_file_with_ext(ext: &str) -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(format!("testfile.{}", ext));
@@ -29,6 +31,8 @@ pub fn create_test_file_with_ext(ext: &str) -> (TempDir, PathBuf) {
     (dir, path)
 }
 
+/// Helper: create ClassifiedFileMetadata for a given path
+#[allow(dead_code)]
 pub fn create_test_metadata(path: &Path) -> ClassifiedFileMetadata {
     let mime_type = match path.extension().and_then(|ext| ext.to_str()) {
         Some("txt") => "text/plain",
